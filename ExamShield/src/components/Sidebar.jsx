@@ -14,17 +14,6 @@ import {
   X,
   Radio
 } from 'lucide-react';
-import { UserRole } from '../types';
-
-interface SidebarProps {
-  activeTab: string;
-  setActiveTab: (tab: string) => void;
-  session: { username: string; role: UserRole; fullName: string };
-  onLogout: () => void;
-  wsConnected: boolean;
-  mobileOpen: boolean;
-  setMobileOpen: (open: boolean) => void;
-}
 
 export default function Sidebar({
   activeTab,
@@ -34,7 +23,7 @@ export default function Sidebar({
   wsConnected,
   mobileOpen,
   setMobileOpen
-}: SidebarProps) {
+}) {
   
   const MENU_ITEMS = [
     { id: 'dashboard', label: 'Live Monitoring', icon: LayoutDashboard, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
@@ -50,7 +39,7 @@ export default function Sidebar({
   // Filters menu items based on active session's role
   const allowedMenuItems = MENU_ITEMS.filter(item => item.roles.includes(session.role));
 
-  const handleTabClick = (tabId: string) => {
+  const handleTabClick = (tabId) => {
     setActiveTab(tabId);
     setMobileOpen(false);
   };
@@ -110,7 +99,7 @@ export default function Sidebar({
       <div className="pt-4 border-t border-blue-900/30">
         <div className="flex items-center gap-3 p-2 rounded-xl bg-blue-950/20 border border-blue-900/20 mb-3">
           <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center font-bold text-xs text-white shadow-md shadow-blue-500/10">
-            {session.fullName.charAt(0)}
+            {session.fullName ? session.fullName.charAt(0) : 'U'}
           </div>
           <div className="overflow-hidden min-w-0 flex-1">
             <span className="block text-xs font-semibold text-white truncate">{session.fullName}</span>

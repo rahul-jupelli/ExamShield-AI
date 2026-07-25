@@ -2,29 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { 
   FileText, 
   Printer, 
-  User, 
-  AlertOctagon, 
-  Calendar, 
-  Compass, 
-  Cpu, 
-  Award, 
-  Clock, 
-  Eye, 
   Download,
-  Check,
+  Eye, 
   ShieldCheck
 } from 'lucide-react';
-import { Student, UserRole } from '../types';
 import GlassCard from './GlassCard';
 
-interface ReportsViewProps {
-  students: Student[];
-  role: UserRole;
-  operatorName: string;
-}
-
-export default function ReportsView({ students, role, operatorName }: ReportsViewProps) {
-  // Only students with some flagged or suspicious status by default
+export default function ReportsView({ students = [], role, operatorName }) {
   const flaggedStudents = useMemo(() => {
     return students.filter(s => s.status !== 'Verified Safe');
   }, [students]);
@@ -39,24 +23,17 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
     return students.find(s => s.id === selectedStudentId);
   }, [students, selectedStudentId]);
 
-  const handlePrint = () => {
-    window.print();
-  };
+  const handlePrint = () => window.print();
 
   const handleDownloadSim = () => {
     setReportSuccess(true);
-    setTimeout(() => {
-      setReportSuccess(false);
-    }, 4000);
-    
-    // Fallback to native print to save as PDF
+    setTimeout(() => setReportSuccess(false), 4000);
     window.print();
   };
 
   return (
     <div className="space-y-6">
       
-      {/* 1. Header Banner */}
       <div className="flex items-center justify-between print:hidden">
         <div>
           <h1 className="text-2xl font-extrabold text-white flex items-center gap-2">
@@ -67,16 +44,13 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
         </div>
       </div>
 
-      {/* 2. Interactive Compiler Form (Hidden on Print) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 print:hidden">
         
-        {/* Compiler controls */}
         <div className="lg:col-span-5 space-y-6">
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider">Report Parameters Compiler</h3>
             
             <div className="space-y-3 text-xs">
-              
               <div>
                 <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Select Flagged Student</label>
                 <select
@@ -131,7 +105,7 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
               </div>
 
               <div>
-                <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Operator Notes & Action Actions</label>
+                <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Operator Notes & Action Taken</label>
                 <textarea
                   value={customNotes}
                   onChange={(e) => setCustomNotes(e.target.value)}
@@ -140,7 +114,6 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                   placeholder="Summarize exact visual cues, RF strengths, and physical measures..."
                 />
               </div>
-
             </div>
 
             <div className="pt-3 border-t border-blue-900/20 space-y-2">
@@ -173,7 +146,6 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
           )}
         </div>
 
-        {/* Live Document Preview */}
         <div className="lg:col-span-7 space-y-4">
           <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <Eye className="h-4 w-4 text-cyan-400" />
@@ -181,12 +153,9 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
           </h3>
           
           <div className="p-8 rounded-2xl bg-white text-slate-950 shadow-2xl relative border-4 border-slate-300 min-h-[600px] font-serif">
-            {/* Top watermarked grid style */}
             <div className="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none opacity-40" />
             
             <div className="relative z-10 space-y-6">
-              
-              {/* Report Header */}
               <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
                 <div>
                   <h2 className="text-xl font-bold tracking-tight text-slate-900 font-sans uppercase">EXAMSHIELD SECURITY COMMISSION</h2>
@@ -199,7 +168,6 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                 </div>
               </div>
 
-              {/* General details */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-sans text-slate-700">
                 <div>
                   <span className="block text-[9px] font-bold text-slate-400 uppercase">CASE FILE ID</span>
@@ -219,10 +187,8 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                 </div>
               </div>
 
-              {/* Student details box */}
               {selectedStudent ? (
                 <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-4">
-                  {/* Small black and white portrait photo */}
                   <div className="md:col-span-3 h-28 w-full bg-slate-200 rounded border border-slate-300 overflow-hidden">
                     <img 
                       src={selectedStudent.photo} 
@@ -231,15 +197,12 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                       referrerPolicy="no-referrer"
                     />
                   </div>
-                  
-                  {/* Student details */}
                   <div className="md:col-span-9 flex flex-col justify-between text-xs font-sans">
                     <div className="space-y-1">
                       <span className="block text-[9px] font-bold text-slate-400 uppercase">INCIDENTEE DETAIL</span>
                       <span className="block text-base font-extrabold text-slate-900 leading-tight">{selectedStudent.name}</span>
                       <span className="block text-slate-500">Branch Course: {selectedStudent.branch}</span>
                     </div>
-
                     <div className="grid grid-cols-2 gap-2 text-[10.5px] text-slate-600 mt-2">
                       <span>Hall ticket: <strong className="text-slate-900 font-mono">{selectedStudent.hallTicket}</strong></span>
                       <span>Assigned Seat: <strong className="text-slate-900 font-mono">{selectedStudent.seat}</strong></span>
@@ -252,7 +215,6 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                 </div>
               )}
 
-              {/* Infraction metrics */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-900 font-sans uppercase tracking-wider">INCIDENTS & COMPLIANCE METRICS</h3>
                 <div className="border-t border-slate-300 pt-2 text-xs font-sans text-slate-800 space-y-2">
@@ -260,17 +222,14 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                     <span className="text-slate-500 font-semibold">Classification Type:</span>
                     <span className="text-slate-900 font-bold font-mono">{violationType}</span>
                   </div>
-                  
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-semibold">Identified Object Tag:</span>
                     <span className="text-slate-900 font-bold font-mono">{selectedStudent?.detectedDevice || 'Concealed smart device'}</span>
                   </div>
-
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-semibold">AI Confidence Matrix:</span>
                     <span className="text-red-700 font-bold font-mono">{(selectedStudent?.detectionConfidence || selectedStudent?.suspicionScore || 95)}% POSITIVE CONFIRMATION</span>
                   </div>
-
                   <div className="flex justify-between">
                     <span className="text-slate-500 font-semibold">Incident Capture Hour:</span>
                     <span className="text-slate-900 font-mono">{selectedStudent ? new Date(selectedStudent.timestamp).toLocaleTimeString() : '10:05 AM'}</span>
@@ -278,7 +237,6 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                 </div>
               </div>
 
-              {/* Operator comments */}
               <div className="space-y-2">
                 <h3 className="text-xs font-bold text-slate-900 font-sans uppercase tracking-wider">OFFICIAL TELEMETRY OBSERVATION LOG</h3>
                 <div className="border-t border-slate-300 pt-2 text-xs font-serif italic text-slate-800 leading-relaxed">
@@ -286,7 +244,6 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                 </div>
               </div>
 
-              {/* Signature grid */}
               <div className="grid grid-cols-2 gap-8 pt-10 text-[10px] font-sans text-slate-600">
                 <div className="border-t border-slate-400 pt-2">
                   <span className="block font-bold text-slate-950 uppercase">{operatorName}</span>
@@ -297,107 +254,10 @@ export default function ReportsView({ students, role, operatorName }: ReportsVie
                   <span className="block text-[8px] mt-1">EXAMINATIONS CONTROLLER / DEAN APPROVAL</span>
                 </div>
               </div>
-
             </div>
           </div>
         </div>
 
-      </div>
-
-      {/* 3. PRINT ONLY STYLE FOR window.print() */}
-      <div className="hidden print:block bg-white text-slate-950 font-serif p-10 w-full min-h-screen">
-        <div className="space-y-6">
-          <div className="flex justify-between items-start border-b-2 border-slate-900 pb-4">
-            <div>
-              <h2 className="text-xl font-bold tracking-tight text-slate-900 font-sans uppercase">EXAMSHIELD SECURITY COMMISSION</h2>
-              <p className="text-[10px] font-sans font-semibold tracking-wider text-slate-500">OFFICIAL INCIDENT REPORT RECORD // ACADEMIC COMPLIANCE</p>
-            </div>
-            <div>
-              <span className="inline-block px-2.5 py-1 bg-red-100 text-red-800 border border-red-200 text-[10px] font-mono font-bold uppercase rounded">
-                CONTRABAND DETECTED
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-4 gap-4 text-xs font-sans text-slate-700">
-            <div>
-              <span className="block text-[9px] font-bold text-slate-400 uppercase">CASE FILE ID</span>
-              <span className="block font-semibold text-slate-900 font-mono">#ES-2026-{(selectedStudent?.id || '99').toUpperCase()}</span>
-            </div>
-            <div>
-              <span className="block text-[9px] font-bold text-slate-400 uppercase">TELEMETRY SOURCE</span>
-              <span className="block font-semibold text-slate-900 font-mono">{roverId}</span>
-            </div>
-            <div>
-              <span className="block text-[9px] font-bold text-slate-400 uppercase">DATE RENDER</span>
-              <span className="block font-semibold text-slate-900 font-mono">July 21, 2026</span>
-            </div>
-            <div>
-              <span className="block text-[9px] font-bold text-slate-400 uppercase">SECTOR</span>
-              <span className="block font-semibold text-slate-900 font-mono">{selectedStudent?.room || 'LH-302'}</span>
-            </div>
-          </div>
-
-          {selectedStudent && (
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 grid grid-cols-12 gap-4">
-              <div className="col-span-3 h-28 bg-slate-200 rounded border border-slate-300 overflow-hidden">
-                <img 
-                  src={selectedStudent.photo} 
-                  alt="Student portrait" 
-                  className="w-full h-full object-cover grayscale"
-                  referrerPolicy="no-referrer"
-                />
-              </div>
-              <div className="col-span-9 flex flex-col justify-between text-xs font-sans">
-                <div className="space-y-1">
-                  <span className="block text-[9px] font-bold text-slate-400 uppercase">INCIDENTEE DETAIL</span>
-                  <span className="block text-base font-extrabold text-slate-900 leading-tight">{selectedStudent.name}</span>
-                  <span className="block text-slate-500">Branch Course: {selectedStudent.branch}</span>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-[10.5px] text-slate-600 mt-2">
-                  <span>Hall ticket: <strong className="text-slate-900 font-mono">{selectedStudent.hallTicket}</strong></span>
-                  <span>Assigned Seat: <strong className="text-slate-900 font-mono">{selectedStudent.seat}</strong></span>
-                </div>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-slate-900 font-sans uppercase tracking-wider">INCIDENTS & COMPLIANCE METRICS</h3>
-            <div className="border-t border-slate-300 pt-2 text-xs font-sans text-slate-800 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-semibold">Classification Type:</span>
-                <span className="text-slate-900 font-bold font-mono">{violationType}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-semibold">Identified Object Tag:</span>
-                <span className="text-slate-900 font-bold font-mono">{selectedStudent?.detectedDevice || 'Concealed smart watch'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500 font-semibold">AI Confidence Matrix:</span>
-                <span className="text-red-700 font-bold font-mono">{(selectedStudent?.detectionConfidence || selectedStudent?.suspicionScore || 95)}% POSITIVE CONFIRMATION</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-slate-900 font-sans uppercase tracking-wider">OFFICIAL TELEMETRY OBSERVATION LOG</h3>
-            <div className="border-t border-slate-300 pt-2 text-xs font-serif italic text-slate-800 leading-relaxed">
-              "{customNotes}"
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-8 pt-10 text-[10px] font-sans text-slate-600">
-            <div className="border-t border-slate-400 pt-2">
-              <span className="block font-bold text-slate-950 uppercase">{operatorName}</span>
-              <span className="block text-[8px]">LOGGED OPERATING TECHNICIAN</span>
-            </div>
-            <div className="border-t border-slate-400 pt-2">
-              <span className="block border-b border-dashed border-slate-300 h-4 w-full" />
-              <span className="block text-[8px] mt-1">EXAMINATIONS CONTROLLER / DEAN APPROVAL</span>
-            </div>
-          </div>
-        </div>
       </div>
 
     </div>

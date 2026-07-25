@@ -11,29 +11,21 @@ import {
   X,
   Sparkles
 } from 'lucide-react';
-import { LiveAlert, AlertPriority, AlertStatus, UserRole } from '../types';
 import GlassCard from './GlassCard';
 
-interface AlertsViewProps {
-  alerts: LiveAlert[];
-  role: UserRole;
-  onResolveAlert: (alertId: string, status: AlertStatus, action: string) => void;
-  onTriggerAlert: (alert: { title: string; priority: AlertPriority; location: string; details: string }) => void;
-}
-
-export default function AlertsView({ alerts, role, onResolveAlert, onTriggerAlert }: AlertsViewProps) {
+export default function AlertsView({ alerts = [], role, onResolveAlert, onTriggerAlert }) {
   const [showForm, setShowForm] = useState(false);
   const [newTitle, setNewTitle] = useState('Unauthorized Person Entry');
-  const [newPriority, setNewPriority] = useState<AlertPriority>('HIGH');
+  const [newPriority, setNewPriority] = useState('HIGH');
   const [newLocation, setNewLocation] = useState('LH-302 Entrance');
   const [newDetails, setNewDetails] = useState('An individual was detected moving inside the restricted exam entrance corridor without matching badge verification.');
 
-  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [resolvingId, setResolvingId] = useState(null);
   const [resolveActionText, setResolveActionText] = useState('');
 
   const isReadOnly = role === 'Viewer';
 
-  const handleCreateAlert = (e: React.FormEvent) => {
+  const handleCreateAlert = (e) => {
     e.preventDefault();
     onTriggerAlert({
       title: newTitle,
@@ -44,12 +36,12 @@ export default function AlertsView({ alerts, role, onResolveAlert, onTriggerAler
     setShowForm(false);
   };
 
-  const startResolve = (alertId: string) => {
+  const startResolve = (alertId) => {
     setResolvingId(alertId);
     setResolveActionText('Dispatched floor supervisors to location. Secured situation. Logged resolution.');
   };
 
-  const submitResolve = (alertId: string) => {
+  const submitResolve = (alertId) => {
     onResolveAlert(alertId, 'Resolved', resolveActionText);
     setResolvingId(null);
     setResolveActionText('');
@@ -118,7 +110,7 @@ export default function AlertsView({ alerts, role, onResolveAlert, onTriggerAler
                 <label className="block text-[10px] font-mono font-bold text-slate-400 uppercase mb-1">Incident Severity</label>
                 <select
                   value={newPriority}
-                  onChange={(e) => setNewPriority(e.target.value as AlertPriority)}
+                  onChange={(e) => setNewPriority(e.target.value)}
                   className="w-full bg-[#010409] border border-blue-900/30 rounded-lg p-2.5 text-xs text-white focus:border-blue-500 focus:outline-none"
                 >
                   <option value="CRITICAL">CRITICAL (System Halt)</option>

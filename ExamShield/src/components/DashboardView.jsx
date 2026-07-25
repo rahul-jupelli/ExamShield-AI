@@ -15,17 +15,9 @@ import {
   Wifi,
   Smartphone
 } from 'lucide-react';
-import { Student, RoverStatus, LiveAlert } from '../types';
 import GlassCard from './GlassCard';
 
-interface DashboardViewProps {
-  students: Student[];
-  rover: RoverStatus;
-  alerts: LiveAlert[];
-  onSelectStudent: (student: Student) => void;
-}
-
-export default function DashboardView({ students, rover, alerts, onSelectStudent }: DashboardViewProps) {
+export default function DashboardView({ students = [], rover = {}, alerts = [], onSelectStudent }) {
   const [searchQuery, setSearchQuery] = useState('');
 
   // 1. Calculate stats from live variables
@@ -60,9 +52,9 @@ export default function DashboardView({ students, rover, alerts, onSelectStudent
 
   // 3. Separate into 3 priority groups
   const { group1, group2, group3 } = useMemo(() => {
-    const g1: Student[] = [];
-    const g2: Student[] = [];
-    const g3: Student[] = [];
+    const g1 = [];
+    const g2 = [];
+    const g3 = [];
 
     filteredStudents.forEach(s => {
       if (s.status === 'Device Detected') {
@@ -202,7 +194,7 @@ export default function DashboardView({ students, rover, alerts, onSelectStudent
         {group1.length > 0 && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
+              <span className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
               <h2 className="text-xs font-bold font-mono uppercase tracking-wider text-rose-400">
                 Group 1: CONFIRMED DEVIATIONS & DEVIATING DEVICES ({group1.length})
               </h2>
@@ -215,12 +207,15 @@ export default function DashboardView({ students, rover, alerts, onSelectStudent
                   onClick={() => onSelectStudent(student)}
                   className="group relative rounded-2xl border border-rose-500/40 bg-rose-950/15 hover:bg-rose-950/25 p-4 flex gap-4 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(244,63,94,0.05)] hover:-translate-y-0.5"
                 >
-                  <div className="relative w-20 h-24 rounded-xl overflow-hidden border border-rose-500/20 flex-shrink-0">
+                  <div className="relative w-20 h-24 rounded-xl overflow-hidden border border-rose-500/20 flex-shrink-0 bg-slate-900">
                     <img 
                       src={student.photo} 
                       alt={student.name} 
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+                      }}
                     />
                     <div className="absolute top-1.5 left-1.5 bg-rose-500 text-white text-[8px] font-bold px-1 rounded uppercase font-mono tracking-wider">
                       Threat
@@ -275,12 +270,15 @@ export default function DashboardView({ students, rover, alerts, onSelectStudent
                   onClick={() => onSelectStudent(student)}
                   className="group relative rounded-2xl border border-amber-500/30 bg-amber-950/15 hover:bg-amber-950/25 p-4 flex gap-4 transition-all duration-300 cursor-pointer shadow-[0_0_15px_rgba(245,158,11,0.05)] hover:-translate-y-0.5"
                 >
-                  <div className="relative w-20 h-24 rounded-xl overflow-hidden border border-amber-500/15 flex-shrink-0">
+                  <div className="relative w-20 h-24 rounded-xl overflow-hidden border border-amber-500/15 flex-shrink-0 bg-slate-900">
                     <img 
                       src={student.photo} 
                       alt={student.name} 
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+                      }}
                     />
                     <div className="absolute top-1.5 left-1.5 bg-amber-500 text-slate-950 text-[8px] font-black px-1 rounded uppercase font-mono">
                       FLAG: {student.suspicionScore}%
@@ -331,8 +329,11 @@ export default function DashboardView({ students, rover, alerts, onSelectStudent
                   <img 
                     src={student.photo} 
                     alt={student.name} 
-                    className="w-11 h-11 rounded-lg object-cover border border-white/5 grayscale group-hover:grayscale-0 transition-all"
+                    className="w-11 h-11 rounded-lg object-cover border border-white/5 grayscale group-hover:grayscale-0 transition-all bg-slate-900"
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+                    }}
                   />
                   <div className="flex-1 min-w-0 flex flex-col justify-center">
                     <div className="flex items-center justify-between gap-1">

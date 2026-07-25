@@ -13,14 +13,9 @@ import {
   Camera,
   Globe
 } from 'lucide-react';
-import { SystemMetrics } from '../types';
 import GlassCard from './GlassCard';
 
-interface HealthViewProps {
-  metrics: SystemMetrics;
-}
-
-export default function HealthView({ metrics }: HealthViewProps) {
+export default function HealthView({ metrics = {} }) {
   
   const HEALTH_SERVICES = [
     { name: 'Core express API Server', status: metrics.backend === 'online', type: 'Backend', desc: 'Port 3000 REST services & controller handles.' },

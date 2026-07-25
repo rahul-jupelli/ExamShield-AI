@@ -25,22 +25,20 @@ import {
   Hand,
   Anchor
 } from 'lucide-react';
-import { RoverStatus, UserRole } from '../types';
 import GlassCard from './GlassCard';
 
-interface RoverViewProps {
-  rover: RoverStatus;
-  role: UserRole;
-  onSendCommand: (command: string) => void;
-}
-
-export default function RoverView({ rover, role, onSendCommand }: RoverViewProps) {
+export default function RoverView({ rover = {}, role, onSendCommand }) {
   const [showBboxes, setShowBboxes] = useState(true);
-  const [videoFilter, setVideoFilter] = useState<'normal' | 'infrared' | 'wireframe'>('normal');
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [videoFilter, setVideoFilter] = useState('normal');
+  const canvasRef = useRef(null);
 
   // Quick action restriction check
   const isReadOnly = role === 'Viewer';
+
+  const roverRef = useRef(rover);
+  useEffect(() => {
+    roverRef.current = rover;
+  }, [rover]);
 
   // Live Canvas drawing loop to overlay fake AI tracking boxes with high-performance animations
   useEffect(() => {
@@ -49,7 +47,7 @@ export default function RoverView({ rover, role, onSendCommand }: RoverViewProps
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    let animFrame: number;
+    let animFrame;
     let angle = 0;
 
     const render = () => {
@@ -164,9 +162,10 @@ export default function RoverView({ rover, role, onSendCommand }: RoverViewProps
       ctx.fillText(`COMP: ${showBboxes ? 'AI-ON' : 'AI-MUTED'}`, 20, 50);
 
       // Frame time stamp
+      const currentBatt = roverRef.current ? roverRef.current.battery : 88;
       const dateStr = new Date().toLocaleTimeString();
       ctx.fillText(`FRAME_T: ${dateStr}`, canvas.width - 130, 20);
-      ctx.fillText(`BATTERY_V: ${(3.7 + (rover.battery/100)*0.5).toFixed(2)}V`, canvas.width - 130, 35);
+      ctx.fillText(`BATTERY_V: ${(3.7 + (currentBatt / 100) * 0.5).toFixed(2)}V`, canvas.width - 130, 35);
 
       animFrame = requestAnimationFrame(render);
     };
@@ -176,7 +175,7 @@ export default function RoverView({ rover, role, onSendCommand }: RoverViewProps
     return () => {
       cancelAnimationFrame(animFrame);
     };
-  }, [showBboxes, videoFilter, rover.battery]);
+  }, [showBboxes, videoFilter]);
 
   return (
     <div className="space-y-6">
@@ -215,7 +214,7 @@ export default function RoverView({ rover, role, onSendCommand }: RoverViewProps
                   AI HUD: {showBboxes ? 'SHOW' : 'HIDE'}
                 </button>
                 <div className="flex bg-[#010409] p-0.5 rounded-lg border border-blue-900/30">
-                  {(['normal', 'infrared', 'wireframe'] as const).map((mode) => (
+                  {['normal', 'infrared', 'wireframe'].map((mode) => (
                     <button
                       key={mode}
                       onClick={() => setVideoFilter(mode)}
@@ -477,7 +476,7 @@ export default function RoverView({ rover, role, onSendCommand }: RoverViewProps
                 <span className="text-slate-400 font-sans">Storage Index</span>
                 <div className="flex items-center gap-1.5 font-mono text-white font-bold">
                   <HardDrive className="h-4 w-4 text-blue-400" />
-                  <span>{rover.storageUsed.toFixed(0)} / {rover.storageTotal} GB</span>
+                  <span>{Number(rover.storageUsed || 0).toFixed(0)} / {rover.storageTotal} GB</span>
                 </div>
               </div>
 

@@ -1,13 +1,6 @@
 import React from 'react';
 
-interface GlassCardProps {
-  children: React.ReactNode;
-  className?: string;
-  id?: string;
-  hoverEffect?: boolean;
-}
-
-export default function GlassCard({ children, className = '', id, hoverEffect = false }: GlassCardProps) {
+export default function GlassCard({ children, className = '', id, hoverEffect = false }) {
   return (
     <div
       id={id}

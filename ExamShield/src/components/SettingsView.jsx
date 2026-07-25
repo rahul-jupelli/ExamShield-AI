@@ -10,51 +10,28 @@ import {
   Plus, 
   Trash2, 
   Save, 
-  ShieldCheck,
-  Check
+  ShieldCheck
 } from 'lucide-react';
 import GlassCard from './GlassCard';
 
-interface SettingsViewProps {
-  settings: {
-    examHalls: string[];
-    aiThreshold: number;
-    suspicionThreshold: number;
-    notificationChannels: {
-      dashboard: boolean;
-      audioAlerts: boolean;
-      smsDispatch: boolean;
-      deanEmail: boolean;
-    };
-    roverConfig: {
-      patrolSpeed: number;
-      thermalInterval: number;
-      opticalTracking: boolean;
-      rfJammerBlock: boolean;
-    };
-    operators: { name: string; role: string; active: boolean }[];
-  };
-  onSaveSettings: (newSettings: any) => void;
-}
-
-export default function SettingsView({ settings, onSaveSettings }: SettingsViewProps) {
-  const [aiThreshold, setAiThreshold] = useState(settings.aiThreshold);
-  const [suspicionThreshold, setSuspicionThreshold] = useState(settings.suspicionThreshold);
+export default function SettingsView({ settings = {}, onSaveSettings }) {
+  const [aiThreshold, setAiThreshold] = useState(settings.aiThreshold ?? 85);
+  const [suspicionThreshold, setSuspicionThreshold] = useState(settings.suspicionThreshold ?? 70);
   const [newHall, setNewHall] = useState('');
-  const [halls, setHalls] = useState<string[]>(settings.examHalls);
+  const [halls, setHalls] = useState(settings.examHalls || []);
   
-  const [dashboard, setDashboard] = useState(settings.notificationChannels.dashboard);
-  const [audioAlerts, setAudioAlerts] = useState(settings.notificationChannels.audioAlerts);
-  const [smsDispatch, setSmsDispatch] = useState(settings.notificationChannels.smsDispatch);
-  const [deanEmail, setDeanEmail] = useState(settings.notificationChannels.deanEmail);
+  const [dashboard, setDashboard] = useState(settings.notificationChannels?.dashboard ?? true);
+  const [audioAlerts, setAudioAlerts] = useState(settings.notificationChannels?.audioAlerts ?? true);
+  const [smsDispatch, setSmsDispatch] = useState(settings.notificationChannels?.smsDispatch ?? false);
+  const [deanEmail, setDeanEmail] = useState(settings.notificationChannels?.deanEmail ?? false);
 
-  const [patrolSpeed, setPatrolSpeed] = useState(settings.roverConfig.patrolSpeed);
-  const [opticalTracking, setOpticalTracking] = useState(settings.roverConfig.opticalTracking);
-  const [thermalInterval, setThermalInterval] = useState(settings.roverConfig.thermalInterval);
+  const [patrolSpeed, setPatrolSpeed] = useState(settings.roverConfig?.patrolSpeed ?? 0.5);
+  const [opticalTracking, setOpticalTracking] = useState(settings.roverConfig?.opticalTracking ?? true);
+  const [thermalInterval, setThermalInterval] = useState(settings.roverConfig?.thermalInterval ?? 5);
 
   const [showSavedToast, setShowSavedToast] = useState(false);
 
-  const handleAddHall = (e: React.FormEvent) => {
+  const handleAddHall = (e) => {
     e.preventDefault();
     if (newHall.trim() && !halls.includes(newHall.trim())) {
       setHalls([...halls, newHall.trim()]);
@@ -62,7 +39,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
     }
   };
 
-  const handleRemoveHall = (hallToRemove: string) => {
+  const handleRemoveHall = (hallToRemove) => {
     setHalls(halls.filter(h => h !== hallToRemove));
   };
 
@@ -71,32 +48,24 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
       examHalls: halls,
       aiThreshold,
       suspicionThreshold,
-      notificationChannels: {
-        dashboard,
-        audioAlerts,
-        smsDispatch,
-        deanEmail
-      },
+      notificationChannels: { dashboard, audioAlerts, smsDispatch, deanEmail },
       roverConfig: {
         patrolSpeed,
         thermalInterval,
         opticalTracking,
-        rfJammerBlock: settings.roverConfig.rfJammerBlock
+        rfJammerBlock: settings.roverConfig?.rfJammerBlock ?? false
       },
-      operators: settings.operators
+      operators: settings.operators || []
     };
 
     onSaveSettings(updated);
     setShowSavedToast(true);
-    setTimeout(() => {
-      setShowSavedToast(false);
-    }, 4000);
+    setTimeout(() => setShowSavedToast(false), 4000);
   };
 
   return (
     <div className="space-y-6">
       
-      {/* 1. Header Banner */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-extrabold text-white flex items-center gap-2">
@@ -127,10 +96,8 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Left column (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
           
-          {/* Section A: AI CV Thresholds */}
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Sliders className="h-4 w-4 text-cyan-400" />
@@ -138,7 +105,6 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
             </h3>
 
             <div className="space-y-4">
-              {/* AI Threshold */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-300 font-semibold">Optical Device Match Confidence</span>
@@ -157,7 +123,6 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
                 </span>
               </div>
 
-              {/* Suspicion Threshold */}
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-slate-300 font-semibold">Nervous Posture Deviance Threshold</span>
@@ -178,14 +143,12 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
             </div>
           </GlassCard>
 
-          {/* Section B: Exam Halls */}
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <MapPin className="h-4 w-4 text-cyan-400" />
               Active Exam Room Registry
             </h3>
 
-            {/* List and add form */}
             <div className="space-y-3">
               <form onSubmit={handleAddHall} className="flex gap-2.5">
                 <input
@@ -219,7 +182,6 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
             </div>
           </GlassCard>
 
-          {/* Section C: Rover Config */}
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Cpu className="h-4 w-4 text-cyan-400" />
@@ -269,10 +231,8 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
 
         </div>
 
-        {/* Right column (5 cols) */}
         <div className="lg:col-span-5 space-y-6">
           
-          {/* Section D: Operator Accounts */}
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <UserCheck className="h-4 w-4 text-cyan-400" />
@@ -280,7 +240,7 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
             </h3>
 
             <div className="space-y-2.5">
-              {settings.operators.map((op, i) => (
+              {(settings.operators || []).map((op, i) => (
                 <div key={i} className="flex gap-3 p-2.5 rounded-xl bg-[#010409]/40 border border-blue-900/20 items-center">
                   <div className="h-7 w-7 rounded-full bg-blue-500/10 flex items-center justify-center font-bold text-xs text-blue-400 border border-blue-500/20">
                     {op.name.charAt(op.name.startsWith('Prof') ? 5 : 0)}
@@ -295,7 +255,6 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
             </div>
           </GlassCard>
 
-          {/* Section E: Notification Channels */}
           <GlassCard className="p-5 space-y-4">
             <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
               <Bell className="h-4 w-4 text-cyan-400" />
@@ -305,42 +264,19 @@ export default function SettingsView({ settings, onSaveSettings }: SettingsViewP
             <div className="space-y-3.5 text-xs text-slate-300">
               <div className="flex items-center justify-between">
                 <span>Active Dashboard Toasts</span>
-                <input
-                  type="checkbox"
-                  checked={dashboard}
-                  onChange={(e) => setDashboard(e.target.checked)}
-                  className="h-4 w-4 rounded accent-blue-500"
-                />
+                <input type="checkbox" checked={dashboard} onChange={(e) => setDashboard(e.target.checked)} className="h-4 w-4 rounded accent-blue-500" />
               </div>
-
               <div className="flex items-center justify-between">
                 <span>Horns and Audio Alerts (Beeps)</span>
-                <input
-                  type="checkbox"
-                  checked={audioAlerts}
-                  onChange={(e) => setAudioAlerts(e.target.checked)}
-                  className="h-4 w-4 rounded accent-blue-500"
-                />
+                <input type="checkbox" checked={audioAlerts} onChange={(e) => setAudioAlerts(e.target.checked)} className="h-4 w-4 rounded accent-blue-500" />
               </div>
-
               <div className="flex items-center justify-between">
                 <span>SMS Dispatch to Hall Proctor</span>
-                <input
-                  type="checkbox"
-                  checked={smsDispatch}
-                  onChange={(e) => setSmsDispatch(e.target.checked)}
-                  className="h-4 w-4 rounded accent-blue-500"
-                />
+                <input type="checkbox" checked={smsDispatch} onChange={(e) => setSmsDispatch(e.target.checked)} className="h-4 w-4 rounded accent-blue-500" />
               </div>
-
               <div className="flex items-center justify-between">
                 <span>Auto-Email Dean Administration</span>
-                <input
-                  type="checkbox"
-                  checked={deanEmail}
-                  onChange={(e) => setDeanEmail(e.target.checked)}
-                  className="h-4 w-4 rounded accent-blue-500"
-                />
+                <input type="checkbox" checked={deanEmail} onChange={(e) => setDeanEmail(e.target.checked)} className="h-4 w-4 rounded accent-blue-500" />
               </div>
             </div>
           </GlassCard>

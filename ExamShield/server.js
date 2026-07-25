@@ -3,7 +3,6 @@ import path from 'path';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createServer as createViteServer } from 'vite';
-import { Student, LiveAlert, RoverStatus, SystemMetrics, AIDetectionLog } from './src/types';
 
 // Initialize Express App
 const app = express();
@@ -15,7 +14,7 @@ const PORT = 3000;
 // In-Memory Database (Realistic Initial Data)
 // ==========================================
 
-const INITIAL_STUDENTS: Student[] = [
+const INITIAL_STUDENTS = [
   // Group 1: Device Detected (RED)
   {
     id: 's1',
@@ -90,112 +89,58 @@ const INITIAL_STUDENTS: Student[] = [
     violationHistory: ['Excessive neck movement detected (exceeding room baselines). Monitor active.'],
     snapshot: 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=400&auto=format&fit=crop&q=80'
   },
-  // Group 3: Verified Safe Students (GREEN)
+  // Group 3: Verified Safe (GREEN)
   {
-    id: 's5',
-    name: 'Ananya Iyer',
-    hallTicket: 'HT2026A102',
-    branch: 'Computer Science',
-    room: 'LH-302',
-    seat: 'Row B-1',
+    id: 's5', name: 'Ananya Iyer', hallTicket: 'HT2026A102', branch: 'Computer Science', room: 'LH-302', seat: 'Row B-1',
     photo: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=150&auto=format&fit=crop&q=80',
-    status: 'Verified Safe',
-    verificationCompleted: true,
-    entryAllowed: true,
-    timestamp: '2026-07-21T09:35:00Z',
-    faceConfidence: 99.8,
-    entryDecision: 'Allowed',
+    status: 'Verified Safe', verificationCompleted: true, entryAllowed: true, timestamp: '2026-07-21T09:35:00Z',
+    faceConfidence: 99.8, entryDecision: 'Allowed',
     verificationHistory: ['09:34 AM - RFID Scanned', '09:35 AM - Facial Recognition Completed (99.8%)', '09:40 AM - Rover initial sweep: Cleared'],
     violationHistory: []
   },
   {
-    id: 's6',
-    name: 'Vikram Malhotra',
-    hallTicket: 'HT2026A105',
-    branch: 'Computer Science',
-    room: 'LH-302',
-    seat: 'Row B-2',
+    id: 's6', name: 'Vikram Malhotra', hallTicket: 'HT2026A105', branch: 'Computer Science', room: 'LH-302', seat: 'Row B-2',
     photo: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=150&auto=format&fit=crop&q=80',
-    status: 'Verified Safe',
-    verificationCompleted: true,
-    entryAllowed: true,
-    timestamp: '2026-07-21T09:36:10Z',
-    faceConfidence: 99.4,
-    entryDecision: 'Allowed',
+    status: 'Verified Safe', verificationCompleted: true, entryAllowed: true, timestamp: '2026-07-21T09:36:10Z',
+    faceConfidence: 99.4, entryDecision: 'Allowed',
     verificationHistory: ['09:35 AM - RFID Scanned', '09:36 AM - Facial Recognition Completed (99.4%)', '09:40 AM - Rover initial sweep: Cleared'],
     violationHistory: []
   },
   {
-    id: 's7',
-    name: 'Pooja Bhat',
-    hallTicket: 'HT2026A302',
-    branch: 'Information Technology',
-    room: 'LH-302',
-    seat: 'Row B-3',
+    id: 's7', name: 'Pooja Bhat', hallTicket: 'HT2026A302', branch: 'Information Technology', room: 'LH-302', seat: 'Row B-3',
     photo: 'https://images.unsplash.com/photo-1554151228-14d9def656e4?w=150&auto=format&fit=crop&q=80',
-    status: 'Verified Safe',
-    verificationCompleted: true,
-    entryAllowed: true,
-    timestamp: '2026-07-21T09:38:22Z',
-    faceConfidence: 98.9,
-    entryDecision: 'Allowed',
+    status: 'Verified Safe', verificationCompleted: true, entryAllowed: true, timestamp: '2026-07-21T09:38:22Z',
+    faceConfidence: 98.9, entryDecision: 'Allowed',
     verificationHistory: ['09:37 AM - RFID Scanned', '09:38 AM - Facial Recognition Completed (98.9%)', '09:42 AM - Rover initial sweep: Cleared'],
     violationHistory: []
   },
   {
-    id: 's8',
-    name: 'Siddharth Rao',
-    hallTicket: 'HT2026B101',
-    branch: 'Electronics & Communication',
-    room: 'LH-302',
-    seat: 'Row C-1',
+    id: 's8', name: 'Siddharth Rao', hallTicket: 'HT2026B101', branch: 'Electronics & Communication', room: 'LH-302', seat: 'Row C-1',
     photo: 'https://images.unsplash.com/photo-1489980508314-941910ded1f4?w=150&auto=format&fit=crop&q=80',
-    status: 'Verified Safe',
-    verificationCompleted: true,
-    entryAllowed: true,
-    timestamp: '2026-07-21T09:41:05Z',
-    faceConfidence: 99.2,
-    entryDecision: 'Allowed',
+    status: 'Verified Safe', verificationCompleted: true, entryAllowed: true, timestamp: '2026-07-21T09:41:05Z',
+    faceConfidence: 99.2, entryDecision: 'Allowed',
     verificationHistory: ['09:40 AM - RFID Scanned', '09:41 AM - Facial Recognition Completed (99.2%)', '09:45 AM - Rover initial sweep: Cleared'],
     violationHistory: []
   },
   {
-    id: 's9',
-    name: 'Kunal Sen',
-    hallTicket: 'HT2026A204',
-    branch: 'Electrical Engineering',
-    room: 'LH-302',
-    seat: 'Row C-2',
+    id: 's9', name: 'Kunal Sen', hallTicket: 'HT2026A204', branch: 'Electrical Engineering', room: 'LH-302', seat: 'Row C-2',
     photo: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=150&auto=format&fit=crop&q=80',
-    status: 'Verified Safe',
-    verificationCompleted: true,
-    entryAllowed: true,
-    timestamp: '2026-07-21T09:43:18Z',
-    faceConfidence: 98.1,
-    entryDecision: 'Allowed',
+    status: 'Verified Safe', verificationCompleted: true, entryAllowed: true, timestamp: '2026-07-21T09:43:18Z',
+    faceConfidence: 98.1, entryDecision: 'Allowed',
     verificationHistory: ['09:42 AM - RFID Scanned', '09:43 AM - Facial Recognition Completed (98.1%)', '09:48 AM - Rover initial sweep: Cleared'],
     violationHistory: []
   },
   {
-    id: 's10',
-    name: 'Riya Verma',
-    hallTicket: 'HT2026C110',
-    branch: 'AI & Data Science',
-    room: 'LH-302',
-    seat: 'Row C-3',
+    id: 's10', name: 'Riya Verma', hallTicket: 'HT2026C110', branch: 'AI & Data Science', room: 'LH-302', seat: 'Row C-3',
     photo: 'https://images.unsplash.com/photo-1548142813-c348350df52b?w=150&auto=format&fit=crop&q=80',
-    status: 'Verified Safe',
-    verificationCompleted: true,
-    entryAllowed: true,
-    timestamp: '2026-07-21T09:44:50Z',
-    faceConfidence: 99.5,
-    entryDecision: 'Allowed',
+    status: 'Verified Safe', verificationCompleted: true, entryAllowed: true, timestamp: '2026-07-21T09:44:50Z',
+    faceConfidence: 99.5, entryDecision: 'Allowed',
     verificationHistory: ['09:43 AM - RFID Scanned', '09:44 AM - Facial Recognition Completed (99.5%)', '09:50 AM - Rover initial sweep: Cleared'],
     violationHistory: []
   }
 ];
 
-let liveAlerts: LiveAlert[] = [
+let liveAlerts = [
   {
     id: 'a1',
     title: 'Smart Watch Emission Detected',
@@ -240,42 +185,42 @@ let liveAlerts: LiveAlert[] = [
   }
 ];
 
-let roverStatus: RoverStatus = {
+let roverStatus = {
   battery: 88,
-  speed: 0.4, // m/s
+  speed: 0.4,
   location: 'LH-302, Aisle C',
   hall: 'Lecture Hall 302',
   floor: 3,
   wifiStatus: 'Excellent',
   cameraStatus: 'Online',
-  temperature: 38.5, // Celsius
-  cpuUsage: 45, // percent
+  temperature: 38.5,
+  cpuUsage: 45,
   storageUsed: 142.4,
   storageTotal: 512,
   motorStatus: 'Operational',
   currentMission: 'Aisle Sweep LH-302',
-  estimatedTimeRemaining: 24, // min
+  estimatedTimeRemaining: 24,
   posX: 42,
   posY: 68,
   manualMode: false
 };
 
-let systemMetrics: SystemMetrics = {
+let systemMetrics = {
   backend: 'online',
   aiModel: 'online',
   camera: 'online',
   database: 'online',
-  storage: 28, // 28%
+  storage: 28,
   internet: 'connected',
   roverConnection: 'connected',
   modelFps: 29.8,
-  inferenceTime: 32.4, // ms
+  inferenceTime: 32.4,
   cpu: 44.5,
   memory: 58.2,
   gpu: 67.1
 };
 
-let aiDetectionLogs: AIDetectionLog[] = [
+let aiDetectionLogs = [
   {
     id: 'log_1',
     frameUrl: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=80',
@@ -320,8 +265,8 @@ let aiDetectionLogs: AIDetectionLog[] = [
 
 let systemSettings = {
   examHalls: ['LH-302', 'LH-304', 'Auditorium-1', 'Main Lab'],
-  aiThreshold: 85, // %
-  suspicionThreshold: 65, // %
+  aiThreshold: 85,
+  suspicionThreshold: 65,
   notificationChannels: {
     dashboard: true,
     audioAlerts: true,
@@ -330,7 +275,7 @@ let systemSettings = {
   },
   roverConfig: {
     patrolSpeed: 0.4,
-    thermalInterval: 2, // seconds
+    thermalInterval: 2,
     opticalTracking: true,
     rfJammerBlock: false
   },
@@ -349,13 +294,12 @@ let systemSettings = {
 // Login endpoint
 app.post('/api/auth/login', (req, res) => {
   const { username, password, role } = req.body;
-  // Simple custom mock login allowing role-based access
   if (username && role) {
-    const fullName = username.split('_').map((s: string) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+    const fullName = username.split('_').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
     res.json({
       success: true,
-      username: username,
-      role: role,
+      username,
+      role,
       fullName: fullName || 'Authorized Officer',
       token: 'jwt-examshield-token-' + role.toLowerCase()
     });
@@ -371,7 +315,7 @@ app.get('/api/students', (req, res) => {
 
 app.post('/api/students/:id/decision', (req, res) => {
   const { id } = req.params;
-  const { decision } = req.body; // 'Allowed' | 'Denied' | 'Pending'
+  const { decision } = req.body;
   const student = INITIAL_STUDENTS.find(s => s.id === id);
   if (student) {
     student.entryDecision = decision;
@@ -393,7 +337,7 @@ app.get('/api/rover', (req, res) => {
 });
 
 app.post('/api/rover/control', (req, res) => {
-  const { command } = req.body; // 'fwd', 'bwd', 'left', 'right', 'stop', 'estop', 'home', 'manual'
+  const { command } = req.body;
   
   if (command === 'manual_toggle_on') {
     roverStatus.manualMode = true;
@@ -428,8 +372,7 @@ app.post('/api/rover/control', (req, res) => {
         roverStatus.speed = 0;
         roverStatus.motorStatus = 'Stopped';
         roverStatus.manualMode = false;
-        // Trigger Critical Alert
-        const estopAlert: LiveAlert = {
+        const estopAlert = {
           id: 'estop_' + Date.now(),
           title: 'ROVER EMERGENCY STOP TRIGGERED',
           priority: 'CRITICAL',
@@ -466,9 +409,7 @@ app.post('/api/alerts/:id/resolve', (req, res) => {
   const alert = liveAlerts.find(a => a.id === id);
   if (alert) {
     alert.status = status;
-    if (action) {
-      alert.actionTaken = action;
-    }
+    if (action) alert.actionTaken = action;
     broadcast({ type: 'ALERT_RESOLVED', alert });
     res.json({ success: true, alert });
   } else {
@@ -478,7 +419,7 @@ app.post('/api/alerts/:id/resolve', (req, res) => {
 
 app.post('/api/alerts/trigger', (req, res) => {
   const { title, priority, location, details } = req.body;
-  const newAlert: LiveAlert = {
+  const newAlert = {
     id: 'custom_' + Date.now(),
     title,
     priority,
@@ -521,15 +462,14 @@ app.post('/api/settings', (req, res) => {
 const server = http.createServer(app);
 const wss = new WebSocketServer({ noServer: true });
 
-const clients = new Set<WebSocket>();
+const clients = new Set();
 
-wss.on('connection', (ws: WebSocket) => {
+wss.on('connection', (ws) => {
   clients.add(ws);
   
-  // Send initial states
   ws.send(JSON.stringify({ type: 'INITIAL_STATE', rover: roverStatus, metrics: systemMetrics, alerts: liveAlerts, students: INITIAL_STUDENTS }));
 
-  ws.on('message', (message: string) => {
+  ws.on('message', (message) => {
     try {
       const data = JSON.parse(message);
       if (data.type === 'PING') {
@@ -545,7 +485,6 @@ wss.on('connection', (ws: WebSocket) => {
   });
 });
 
-// Bind WebSocket upgrade to same port
 server.on('upgrade', (request, socket, head) => {
   if (request.url === '/ws' || request.url?.startsWith('/ws')) {
     wss.handleUpgrade(request, socket, head, (ws) => {
@@ -556,7 +495,7 @@ server.on('upgrade', (request, socket, head) => {
   }
 });
 
-function broadcast(data: any) {
+function broadcast(data) {
   const msg = JSON.stringify(data);
   for (const client of clients) {
     if (client.readyState === WebSocket.OPEN) {
@@ -571,9 +510,8 @@ setInterval(() => {
   if (roverStatus.battery > 5) {
     roverStatus.battery = parseFloat((roverStatus.battery - 0.01).toFixed(2));
   } else {
-    // low battery alert
     if (!liveAlerts.some(a => a.title === 'Critical Low Battery Alert')) {
-      const lowBattAlert: LiveAlert = {
+      const lowBattAlert = {
         id: 'lowbatt',
         title: 'Critical Low Battery Alert',
         priority: 'HIGH',
@@ -588,15 +526,11 @@ setInterval(() => {
     }
   }
 
-  // 2. Rover Patrol Simulation (if not in manual mode)
+  // 2. Rover Patrol Simulation
   if (!roverStatus.manualMode && roverStatus.motorStatus === 'Operational') {
-    // Patrol pathing around a square inside LH-302 map
-    let { posX, posY } = roverStatus;
-    
-    // Simulate movement: let's slide left/right/up/down slowly
     const time = Date.now() / 15000;
-    posX = Math.round(50 + 35 * Math.sin(time));
-    posY = Math.round(50 + 25 * Math.cos(time * 0.8));
+    const posX = Math.round(50 + 35 * Math.sin(time));
+    const posY = Math.round(50 + 25 * Math.cos(time * 0.8));
     
     roverStatus.posX = posX;
     roverStatus.posY = posY;
@@ -616,33 +550,37 @@ setInterval(() => {
   broadcast({ type: 'METRICS_UPDATE', metrics: systemMetrics });
 }, 4000);
 
-// Occasional Mock Random Flagging Event (every 45 seconds, trigger a suspicious student or RFID scan)
+// Occasional Mock Random Flagging Event
 let mockIndex = 0;
 const MOCK_NAMES = ['Karan Singhania', 'Esha Dutta', 'Vivek Prasanna', 'Tina Kapur'];
 const MOCK_BRANCHES = ['Information Tech', 'Cybersecurity', 'Electrical Eng', 'Mechanical Eng'];
+const MOCK_PHOTOS = [
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80'
+];
 
 setInterval(() => {
-  if (clients.size === 0) return; // Only simulate if someone is watching
+  if (clients.size === 0) return;
   
-  // Decide whether to add a new Verified student, or flag a Suspicious student
   const rand = Math.random();
   const timeStr = new Date().toISOString();
   
   if (rand > 0.6) {
-    // Verified Student scanned
     const name = MOCK_NAMES[mockIndex % MOCK_NAMES.length];
     const branch = MOCK_BRANCHES[mockIndex % MOCK_BRANCHES.length];
     const ticket = `HT2026S` + (700 + mockIndex);
     const seatRow = String.fromCharCode(65 + (mockIndex % 6)) + '-' + (mockIndex + 1);
     
-    const newStudent: Student = {
+    const newStudent = {
       id: 'mock_v_' + mockIndex,
       name,
       hallTicket: ticket,
       branch,
       room: 'LH-302',
       seat: `Row ${seatRow}`,
-      photo: `https://images.unsplash.com/photo-${1500000000000 + mockIndex * 100000}?w=150&auto=format&fit=crop&q=80`,
+      photo: MOCK_PHOTOS[mockIndex % MOCK_PHOTOS.length],
       status: 'Verified Safe',
       verificationCompleted: true,
       entryAllowed: true,
@@ -656,12 +594,11 @@ setInterval(() => {
     INITIAL_STUDENTS.push(newStudent);
     broadcast({ type: 'STUDENT_ADDED', student: newStudent });
 
-    // Also push to AI detection history logs
-    const newLog: AIDetectionLog = {
+    const newLog = {
       id: 'log_' + Date.now(),
       frameUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=500&auto=format&fit=crop&q=80',
       detectedObjects: ['Person (Matched)', 'RFID Token Verified'],
-      confidence: newStudent.faceConfidence || 98.0,
+      confidence: newStudent.faceConfidence,
       decision: 'Verified Safe (Green)',
       operator: 'SysGate_Entry',
       timestamp: timeStr,
@@ -671,21 +608,22 @@ setInterval(() => {
     broadcast({ type: 'LOG_ADDED', log: newLog });
     
   } else if (rand > 0.3) {
-    // Suspicious Student scan!
     const name = MOCK_NAMES[(mockIndex + 2) % MOCK_NAMES.length] + ' (Simulated)';
     const branch = MOCK_BRANCHES[(mockIndex + 2) % MOCK_BRANCHES.length];
     const ticket = `HT2026S` + (900 + mockIndex);
     const seatRow = 'Row ' + String.fromCharCode(68 + (mockIndex % 3)) + '-' + (3 + mockIndex);
     
     const score = Math.round(70 + Math.random() * 18);
-    const newStudent: Student = {
+    const snapshot = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=80';
+
+    const newStudent = {
       id: 'mock_s_' + mockIndex,
       name,
       hallTicket: ticket,
       branch,
       room: 'LH-302',
       seat: seatRow,
-      photo: `https://images.unsplash.com/photo-${1530000000000 + mockIndex * 50000}?w=150&auto=format&fit=crop&q=80`,
+      photo: MOCK_PHOTOS[(mockIndex + 1) % MOCK_PHOTOS.length],
       status: 'Suspicious',
       suspicionScore: score,
       suspicionReason: 'Frequent looking under desk and nervous wrist gestures.',
@@ -694,14 +632,13 @@ setInterval(() => {
       entryDecision: 'Pending',
       verificationHistory: [`Facial recognition verification successful`, `Rover AI flagged posture: Neck angle deviated (${score}%)`],
       violationHistory: ['Flagged via active camera Pose-Estimation algorithm.'],
-      snapshot: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=80'
+      snapshot
     };
     
     INITIAL_STUDENTS.push(newStudent);
     broadcast({ type: 'STUDENT_ADDED', student: newStudent });
 
-    // Generate dynamic alert
-    const newAlert: LiveAlert = {
+    const newAlert = {
       id: 'alert_' + Date.now(),
       title: 'Suspicious Pose Activity Flagged',
       priority: 'MEDIUM',
@@ -709,17 +646,16 @@ setInterval(() => {
       location: `LH-302 (${seatRow})`,
       actionTaken: 'Rover camera queued focal review. Triggered manual verification ticket.',
       status: 'Active',
-      snapshot: newStudent.snapshot,
+      snapshot,
       details: `${name} (${ticket}) exhibits posture pattern exceeding room baseline. High suspicion score of ${score}%.`
     };
     
     liveAlerts.unshift(newAlert);
     broadcast({ type: 'NEW_ALERT', alert: newAlert });
 
-    // Also push to AI detection history logs
-    const newLog: AIDetectionLog = {
+    const newLog = {
       id: 'log_' + Date.now(),
-      frameUrl: newStudent.snapshot || '',
+      frameUrl: snapshot,
       detectedObjects: ['Nervous Posture Model', 'Nystagmus Eye Deviance'],
       confidence: score,
       decision: 'Suspicious Pose Flagged (Orange)',
@@ -745,7 +681,6 @@ if (process.env.NODE_ENV === 'production') {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
-  // Vite server integration
   startVite();
 }
 

@@ -1,32 +1,27 @@
 import React, { useState } from 'react';
 import { Shield, Key, Eye, UserCheck, Cpu, Terminal } from 'lucide-react';
-import { UserRole } from '../types';
 
-interface LoginViewProps {
-  onLoginSuccess: (session: { username: string; role: UserRole; fullName: string }) => void;
-}
-
-export default function LoginView({ onLoginSuccess }: LoginViewProps) {
+export default function LoginView({ onLoginSuccess }) {
   const [username, setUsername] = useState('officer_kiran');
   const [password, setPassword] = useState('••••••••');
-  const [role, setRole] = useState<UserRole>('Operator');
+  const [role, setRole] = useState('Operator');
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
   const PRESETS = [
-    { label: 'Officer Kiran (Operator)', role: 'Operator' as UserRole, username: 'officer_kiran', desc: 'Can control rover, clear safe alerts' },
-    { label: 'Prof. Rangan (Controller)', role: 'Exam Controller' as UserRole, username: 'prof_rangan', desc: 'Approve/deny student entry status' },
-    { label: 'Dr. Carter (System Admin)', role: 'Admin' as UserRole, username: 'dr_carter', desc: 'Full configuration & system thresholds' },
-    { label: 'Standard Observer (Viewer)', role: 'Viewer' as UserRole, username: 'visitor_view', desc: 'Read-only live terminal overview' },
+    { label: 'Officer Kiran (Operator)', role: 'Operator', username: 'officer_kiran', desc: 'Can control rover, clear safe alerts' },
+    { label: 'Prof. Rangan (Controller)', role: 'Exam Controller', username: 'prof_rangan', desc: 'Approve/deny student entry status' },
+    { label: 'Dr. Carter (System Admin)', role: 'Admin', username: 'dr_carter', desc: 'Full configuration & system thresholds' },
+    { label: 'Standard Observer (Viewer)', role: 'Viewer', username: 'visitor_view', desc: 'Read-only live terminal overview' },
   ];
 
-  const handlePresetSelect = (preset: typeof PRESETS[0]) => {
+  const handlePresetSelect = (preset) => {
     setUsername(preset.username);
     setRole(preset.role);
     setPassword('demopass123');
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!username.trim()) {
       setErrorMessage('Please provide a security badge username.');
@@ -45,7 +40,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
       if (data.success) {
         onLoginSuccess({
           username: data.username,
-          role: data.role as UserRole,
+          role: data.role,
           fullName: data.fullName,
         });
       } else {
@@ -144,7 +139,7 @@ export default function LoginView({ onLoginSuccess }: LoginViewProps) {
                 <label className="block text-xs font-medium text-slate-400 mb-1 font-mono uppercase">Role Privilege</label>
                 <select
                   value={role}
-                  onChange={(e) => setRole(e.target.value as UserRole)}
+                  onChange={(e) => setRole(e.target.value)}
                   className="w-full bg-[#010409] border border-blue-900/30 rounded-xl py-2.5 px-3 text-white text-sm focus:border-blue-500 focus:outline-none transition-colors"
                 >
                   <option value="Operator">Operator (Primary Patrol & Safety)</option>

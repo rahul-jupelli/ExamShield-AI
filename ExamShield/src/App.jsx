@@ -6,15 +6,6 @@ import {
   ShieldAlert,
   Volume2
 } from 'lucide-react';
-import { 
-  Student, 
-  LiveAlert, 
-  RoverStatus, 
-  SystemMetrics, 
-  AIDetectionLog, 
-  UserRole,
-  UserSession 
-} from './types';
 
 // Importing Custom Subviews
 import LoginView from './components/LoginView';
@@ -31,33 +22,92 @@ import SettingsView from './components/SettingsView';
 
 export default function App() {
   // 1. Session state (auth)
-  const [session, setSession] = useState<UserSession | null>(null);
+  const [session, setSession] = useState(null);
 
   // 2. Navigation State
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // 3. Core Live Telemetry variables
-  const [students, setStudents] = useState<Student[]>([]);
-  const [alerts, setAlerts] = useState<LiveAlert[]>([]);
-  const [rover, setRover] = useState<RoverStatus | null>(null);
-  const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
-  const [logs, setLogs] = useState<AIDetectionLog[]>([]);
-  const [settings, setSettings] = useState<any>(null);
+  const [students, setStudents] = useState([]);
+  const [alerts, setAlerts] = useState([]);
+  const [rover, setRover] = useState({
+    battery: 88,
+    speed: 0.4,
+    location: 'LH-302, Aisle C',
+    hall: 'Lecture Hall 302',
+    floor: 3,
+    wifiStatus: 'Excellent',
+    cameraStatus: 'Online',
+    temperature: 38.5,
+    cpuUsage: 45,
+    storageUsed: 142.4,
+    storageTotal: 512,
+    motorStatus: 'Operational',
+    currentMission: 'Aisle Sweep LH-302',
+    estimatedTimeRemaining: 24,
+    posX: 42,
+    posY: 68,
+    manualMode: false
+  });
+  const [metrics, setMetrics] = useState({
+    backend: 'online',
+    aiModel: 'online',
+    camera: 'online',
+    database: 'online',
+    storage: 28,
+    internet: 'connected',
+    roverConnection: 'connected',
+    modelFps: 29.8,
+    inferenceTime: 32.4,
+    cpu: 44.5,
+    memory: 58.2,
+    gpu: 67.1
+  });
+  const [logs, setLogs] = useState([]);
+  const [settings, setSettings] = useState({
+    examHalls: ['LH-302', 'LH-304', 'Auditorium-1', 'Main Lab'],
+    aiThreshold: 85,
+    suspicionThreshold: 65,
+    notificationChannels: { dashboard: true, audioAlerts: true, smsDispatch: false, deanEmail: true },
+    roverConfig: { patrolSpeed: 0.4, thermalInterval: 2, opticalTracking: true, rfJammerBlock: false },
+    operators: [
+      { name: 'Prof. S. Rangan', role: 'Exam Controller', active: true },
+      { name: 'Officer Kiran Kumar', role: 'Operator', active: true },
+      { name: 'Dr. Helen Carter', role: 'Admin', active: true },
+      { name: 'Viewer Account', role: 'Viewer', active: true }
+    ]
+  });
 
   // 4. Detailed focus modal target
-  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState(null);
 
   // 5. Connection State
   const [wsConnected, setWsConnected] = useState(false);
-  const [toastNotification, setToastNotification] = useState<LiveAlert | null>(null);
+  const [showOfflineBanner, setShowOfflineBanner] = useState(false);
+  const [toastNotification, setToastNotification] = useState(null);
 
-  const socketRef = useRef<WebSocket | null>(null);
+  const socketRef = useRef(null);
+  const wsConnectedRef = useRef(false);
+  useEffect(() => {
+    wsConnectedRef.current = wsConnected;
+  }, [wsConnected]);
+
+  // Grace period before showing offline banner
+  useEffect(() => {
+    let timer;
+    if (!wsConnected) {
+      timer = setTimeout(() => setShowOfflineBanner(true), 3000);
+    } else {
+      setShowOfflineBanner(false);
+    }
+    return () => clearTimeout(timer);
+  }, [wsConnected]);
 
   // 6. Audio Beep feedback
-  const playBeep = useCallback((priority: string) => {
+  const playBeep = useCallback((priority) => {
     try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
@@ -81,7 +131,7 @@ export default function App() {
     }
   }, []);
 
-  // 7. Initial Hydration API Fetches (Fallback and Initial Data)
+  // 7. Initial Hydration API Fetches
   const hydrateAllStates = useCallback(async () => {
     try {
       const [studentsRes, alertsRes, roverRes, metricsRes, logsRes, settingsRes] = await Promise.all([
@@ -118,7 +168,7 @@ export default function App() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
     
-    let reconnectTimeout: any;
+    let reconnectTimeout;
 
     const connectWS = () => {
       const socket = new WebSocket(wsUrl);
@@ -157,7 +207,6 @@ export default function App() {
                 if (prev.some(a => a.id === data.alert.id)) return prev;
                 return [data.alert, ...prev];
               });
-              // Fire notification Banner
               setToastNotification(data.alert);
               playBeep(data.alert.priority);
               break;
@@ -186,9 +235,9 @@ export default function App() {
 
     connectWS();
 
-    // Fallback Polling every 6s in case Websocket is blocked
+    // Fallback Polling every 6s
     const pollingInterval = setInterval(() => {
-      if (!wsConnected) {
+      if (!wsConnectedRef.current) {
         hydrateAllStates();
       }
     }, 6000);
@@ -200,10 +249,10 @@ export default function App() {
       clearTimeout(reconnectTimeout);
       clearInterval(pollingInterval);
     };
-  }, [session, wsConnected, hydrateAllStates, playBeep]);
+  }, [session, playBeep, hydrateAllStates]);
 
-  // 9. Interactive Post Commands Handlers
-  const handleSendCommand = async (command: string) => {
+  // 9. Interactive Post Command Handlers
+  const handleSendCommand = async (command) => {
     try {
       const res = await fetch('/api/rover/control', {
         method: 'POST',
@@ -219,7 +268,7 @@ export default function App() {
     }
   };
 
-  const handleResolveAlert = async (alertId: string, status: any, action: string) => {
+  const handleResolveAlert = async (alertId, status, action) => {
     try {
       const res = await fetch(`/api/alerts/${alertId}/resolve`, {
         method: 'POST',
@@ -235,7 +284,7 @@ export default function App() {
     }
   };
 
-  const handleTriggerMockAlert = async (alertPayload: { title: string; priority: string; location: string; details: string }) => {
+  const handleTriggerMockAlert = async (alertPayload) => {
     try {
       const res = await fetch('/api/alerts/trigger', {
         method: 'POST',
@@ -251,7 +300,7 @@ export default function App() {
     }
   };
 
-  const handleSaveSettings = async (updatedSettings: any) => {
+  const handleSaveSettings = async (updatedSettings) => {
     try {
       const res = await fetch('/api/settings', {
         method: 'POST',
@@ -277,7 +326,7 @@ export default function App() {
     return <LoginView onLoginSuccess={setSession} />;
   }
 
-  // Render subviews dynamically depending on navigation Tab
+  // Render subviews dynamically
   const renderTabContent = () => {
     if (!rover || !metrics || !settings) {
       return (
@@ -377,8 +426,8 @@ export default function App() {
       <main className="flex-1 min-w-0 lg:pl-64 pt-20 lg:pt-6 p-6 min-h-screen flex flex-col justify-between print:pl-0 print:pt-0">
         <div className="space-y-6">
           
-          {/* Telemetry Warning banner when WS falls offline */}
-          {!wsConnected && (
+          {/* Telemetry Warning banner */}
+          {showOfflineBanner && (
             <div className="px-4 py-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3 font-mono print:hidden shadow-[0_0_10px_rgba(245,158,11,0.05)]">
               <span className="flex items-center gap-2">
                 <WifiOff className="h-4.5 w-4.5 animate-pulse" />
@@ -394,7 +443,7 @@ export default function App() {
           )}
 
           {/* Core subview rendering */}
-          <div className="animate-in fade-in duration-200">
+          <div key={activeTab} className="animate-in fade-in duration-200">
             {renderTabContent()}
           </div>
 
@@ -407,7 +456,7 @@ export default function App() {
         </footer>
       </main>
 
-      {/* Detailed student popup profile modal */}
+      {/* Student popup profile modal */}
       {selectedStudent && (
         <StudentProfileModal
           student={students.find(s => s.id === selectedStudent.id) || selectedStudent}

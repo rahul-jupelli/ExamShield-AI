@@ -15,28 +15,20 @@ import {
   Check,
   ChevronRight
 } from 'lucide-react';
-import { Student, UserRole } from '../types';
 import GlassCard from './GlassCard';
 
-interface StudentProfileModalProps {
-  student: Student;
-  role: UserRole;
-  onClose: () => void;
-  onUpdateDecision: (studentId: string, decision: 'Allowed' | 'Denied' | 'Pending') => void;
-}
-
 export default function StudentProfileModal({ 
-  student, 
+  student = {}, 
   role, 
   onClose, 
   onUpdateDecision 
-}: StudentProfileModalProps) {
+}) {
   const [submitting, setSubmitting] = useState(false);
-  const [activeTab, setActiveTab] = useState<'profile' | 'security' | 'timeline'>('profile');
+  const [activeTab, setActiveTab] = useState('profile');
 
   const isControllerOrAdmin = role === 'Exam Controller' || role === 'Admin';
 
-  const handleDecisionChange = async (decision: 'Allowed' | 'Denied' | 'Pending') => {
+  const handleDecisionChange = async (decision) => {
     setSubmitting(true);
     try {
       const response = await fetch(`/api/students/${student.id}/decision`, {
