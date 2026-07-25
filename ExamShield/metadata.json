@@ -1,0 +1,6 @@
+{
+  "name": "ExamShield AI Rover Dashboard",
+  "description": "High-fidelity examination monitoring and real-time security dashboard for AI-powered surveillance rovers.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
