@@ -338,7 +338,7 @@ app.get('/api/rover', (req, res) => {
 
 app.post('/api/rover/control', (req, res) => {
   const { command } = req.body;
-  
+
   if (command === 'manual_toggle_on') {
     roverStatus.manualMode = true;
     roverStatus.speed = 0.0;
@@ -466,7 +466,7 @@ const clients = new Set();
 
 wss.on('connection', (ws) => {
   clients.add(ws);
-  
+
   ws.send(JSON.stringify({ type: 'INITIAL_STATE', rover: roverStatus, metrics: systemMetrics, alerts: liveAlerts, students: INITIAL_STUDENTS }));
 
   ws.on('message', (message) => {
@@ -531,12 +531,12 @@ setInterval(() => {
     const time = Date.now() / 15000;
     const posX = Math.round(50 + 35 * Math.sin(time));
     const posY = Math.round(50 + 25 * Math.cos(time * 0.8));
-    
+
     roverStatus.posX = posX;
     roverStatus.posY = posY;
     roverStatus.speed = 0.4;
     roverStatus.location = `LH-302, Aisle ${posX > 50 ? 'Right' : 'Left'} (Row ${String.fromCharCode(65 + Math.floor(posY / 15))})`;
-    
+
     broadcast({ type: 'ROVER_UPDATE', rover: roverStatus });
   }
 
@@ -563,16 +563,16 @@ const MOCK_PHOTOS = [
 
 setInterval(() => {
   if (clients.size === 0) return;
-  
+
   const rand = Math.random();
   const timeStr = new Date().toISOString();
-  
+
   if (rand > 0.6) {
     const name = MOCK_NAMES[mockIndex % MOCK_NAMES.length];
     const branch = MOCK_BRANCHES[mockIndex % MOCK_BRANCHES.length];
     const ticket = `HT2026S` + (700 + mockIndex);
     const seatRow = String.fromCharCode(65 + (mockIndex % 6)) + '-' + (mockIndex + 1);
-    
+
     const newStudent = {
       id: 'mock_v_' + mockIndex,
       name,
@@ -590,7 +590,7 @@ setInterval(() => {
       verificationHistory: [`RFID Verification Completed`, `Facial Match Approved at Automated Entry Gate`],
       violationHistory: []
     };
-    
+
     INITIAL_STUDENTS.push(newStudent);
     broadcast({ type: 'STUDENT_ADDED', student: newStudent });
 
@@ -606,13 +606,13 @@ setInterval(() => {
     };
     aiDetectionLogs.unshift(newLog);
     broadcast({ type: 'LOG_ADDED', log: newLog });
-    
+
   } else if (rand > 0.3) {
     const name = MOCK_NAMES[(mockIndex + 2) % MOCK_NAMES.length] + ' (Simulated)';
     const branch = MOCK_BRANCHES[(mockIndex + 2) % MOCK_BRANCHES.length];
     const ticket = `HT2026S` + (900 + mockIndex);
     const seatRow = 'Row ' + String.fromCharCode(68 + (mockIndex % 3)) + '-' + (3 + mockIndex);
-    
+
     const score = Math.round(70 + Math.random() * 18);
     const snapshot = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=80';
 
@@ -634,7 +634,7 @@ setInterval(() => {
       violationHistory: ['Flagged via active camera Pose-Estimation algorithm.'],
       snapshot
     };
-    
+
     INITIAL_STUDENTS.push(newStudent);
     broadcast({ type: 'STUDENT_ADDED', student: newStudent });
 
@@ -649,7 +649,7 @@ setInterval(() => {
       snapshot,
       details: `${name} (${ticket}) exhibits posture pattern exceeding room baseline. High suspicion score of ${score}%.`
     };
-    
+
     liveAlerts.unshift(newAlert);
     broadcast({ type: 'NEW_ALERT', alert: newAlert });
 
@@ -666,7 +666,7 @@ setInterval(() => {
     aiDetectionLogs.unshift(newLog);
     broadcast({ type: 'LOG_ADDED', log: newLog });
   }
-  
+
   mockIndex++;
 }, 45000);
 
@@ -693,6 +693,6 @@ async function startVite() {
 }
 
 // Start HTTP listening
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`ExamShield Full-Stack Server listening on http://0.0.0.0:${PORT}`);
+server.listen(PORT, '127.0.0.1', () => {
+  console.log(`ExamShield Full-Stack Server listening on http://127.0.0.1:${PORT}`);
 });
