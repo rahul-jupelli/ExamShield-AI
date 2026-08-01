@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import http from 'http';
@@ -7,6 +8,7 @@ import { createServer as createViteServer } from 'vite';
 // Initialize Express App
 const app = express();
 app.use(express.json());
+
 
 const PORT = 3000;
 
@@ -692,7 +694,7 @@ async function startVite() {
   app.use(vite.middlewares);
 }
 
-// Start HTTP listening
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`ExamShield Full-Stack Server listening on http://127.0.0.1:${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`ExamShield Full-Stack Server listening on http://localhost:${PORT}`);
 });
+

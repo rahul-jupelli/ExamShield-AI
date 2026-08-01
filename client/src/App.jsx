@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Bell, 
-  X, 
-  WifiOff, 
+import {
+  Bell,
+  X,
+  WifiOff,
   ShieldAlert,
   Volume2
 } from 'lucide-react';
+import { supabase } from "./lib/supabase";
 
 // Importing Custom Subviews
 import LoginView from './components/LoginView';
@@ -23,6 +24,47 @@ import SettingsView from './components/SettingsView';
 export default function App() {
   // 1. Session state (auth)
   const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  const formatUserData = (user) => {
+    if (!user) return null;
+    return {
+      ...user,
+      role: "Admin",
+      fullName: user.user_metadata?.full_name || user.email || "Admin Operator",
+    };
+  };
+
+  useEffect(() => {
+    async function getSession() {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.error("Error fetching session:", error.message);
+        } else if (data?.session?.user) {
+          setSession(formatUserData(data.session.user));
+        }
+      } catch (err) {
+        console.error("Session restoration failed:", err);
+      } finally {
+        setAuthLoading(false);
+      }
+    }
+
+    getSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      if (currentSession?.user) {
+        setSession(formatUserData(currentSession.user));
+      } else {
+        setSession(null);
+      }
+      setAuthLoading(false);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
 
   // 2. Navigation State
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -167,7 +209,7 @@ export default function App() {
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
+
     let reconnectTimeout;
 
     const connectWS = () => {
@@ -182,7 +224,7 @@ export default function App() {
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          
+
           switch (data.type) {
             case 'INITIAL_STATE':
               setRover(data.rover);
@@ -316,15 +358,32 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setSession(null);
-    setActiveTab('dashboard');
+    setActiveTab("dashboard");
   };
 
-  // If session is empty, render Secure Gate login
-  if (!session) {
-    return <LoginView onLoginSuccess={setSession} />;
+  // 10. Session Restoration Loading Gate
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
+        <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
+        <span className="text-sm font-bold tracking-wider text-cyan-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
+        <span className="text-xs text-slate-500 mt-2">ExamShield AI Autonomous Surveillance Suite</span>
+      </div>
+    );
   }
+
+  // If session is empty, render Secure Gate login portal
+  if (!session) {
+    return (
+      <LoginView
+        onLoginSuccess={(user) => setSession(formatUserData(user))}
+      />
+    );
+  }
+
 
   // Render subviews dynamically
   const renderTabContent = () => {
@@ -340,25 +399,25 @@ export default function App() {
     switch (activeTab) {
       case 'dashboard':
         return (
-          <DashboardView 
-            students={students} 
-            rover={rover} 
+          <DashboardView
+            students={students}
+            rover={rover}
             alerts={alerts}
-            onSelectStudent={(s) => setSelectedStudent(s)} 
+            onSelectStudent={(s) => setSelectedStudent(s)}
           />
         );
       case 'rover':
         return (
-          <RoverView 
-            rover={rover} 
+          <RoverView
+            rover={rover}
             role={session.role}
-            onSendCommand={handleSendCommand} 
+            onSendCommand={handleSendCommand}
           />
         );
       case 'alerts':
         return (
-          <AlertsView 
-            alerts={alerts} 
+          <AlertsView
+            alerts={alerts}
             role={session.role}
             onResolveAlert={handleResolveAlert}
             onTriggerAlert={handleTriggerMockAlert}
@@ -366,10 +425,10 @@ export default function App() {
         );
       case 'reports':
         return (
-          <ReportsView 
-            students={students} 
+          <ReportsView
+            students={students}
             role={session.role}
-            operatorName={session.fullName} 
+            operatorName={session.fullName}
           />
         );
       case 'analytics':
@@ -380,9 +439,9 @@ export default function App() {
         return <HistoryView logs={logs} />;
       case 'settings':
         return (
-          <SettingsView 
-            settings={settings} 
-            onSaveSettings={handleSaveSettings} 
+          <SettingsView
+            settings={settings}
+            onSaveSettings={handleSaveSettings}
           />
         );
       default:
@@ -392,7 +451,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#010409] text-slate-200 flex font-sans overflow-x-hidden">
-      
+
       {/* Dynamic Toast alert notifications banner */}
       {toastNotification && (
         <div className="fixed top-20 right-4 z-50 max-w-sm rounded-2xl bg-rose-950/95 border border-rose-500/40 p-4 shadow-2xl flex gap-3.5 items-start animate-in slide-in-from-right duration-300 shadow-[0_0_15px_rgba(239,68,68,0.15)]">
@@ -402,7 +461,7 @@ export default function App() {
             <span className="block text-[11px] font-extrabold text-rose-300 mt-1">{toastNotification.title}</span>
             <span className="block text-[10px] text-slate-400 mt-0.5">{toastNotification.location}</span>
           </div>
-          <button 
+          <button
             onClick={() => setToastNotification(null)}
             className="p-0.5 text-slate-400 hover:text-white"
           >
@@ -425,7 +484,7 @@ export default function App() {
       {/* Main Content scroll window */}
       <main className="flex-1 min-w-0 lg:pl-64 pt-20 lg:pt-6 p-6 min-h-screen flex flex-col justify-between print:pl-0 print:pt-0">
         <div className="space-y-6">
-          
+
           {/* Telemetry Warning banner */}
           {showOfflineBanner && (
             <div className="px-4 py-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3 font-mono print:hidden shadow-[0_0_10px_rgba(245,158,11,0.05)]">
@@ -433,8 +492,8 @@ export default function App() {
                 <WifiOff className="h-4.5 w-4.5 animate-pulse" />
                 TELEMETRY LINK INTERRUPTED. COMMENCING HYBRID REST-POLLING ROUTINE.
               </span>
-              <button 
-                onClick={hydrateAllStates} 
+              <button
+                onClick={hydrateAllStates}
                 className="px-2 py-1 text-[10px] bg-amber-500/20 hover:bg-amber-500/30 font-bold uppercase rounded cursor-pointer"
               >
                 Sync Force
@@ -463,8 +522,8 @@ export default function App() {
           role={session.role}
           onClose={() => setSelectedStudent(null)}
           onUpdateDecision={(sId, dec) => {
-            setStudents(prev => prev.map(s => s.id === sId ? { 
-              ...s, 
+            setStudents(prev => prev.map(s => s.id === sId ? {
+              ...s,
               entryDecision: dec,
               status: dec === 'Allowed' ? 'Verified Safe' : s.status,
               entryAllowed: dec === 'Allowed' ? true : dec === 'Denied' ? false : undefined
