@@ -12,8 +12,16 @@ export default defineConfig(() => {
       },
     },
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
-      watch: process.env.DISABLE_HMR === 'true' ? null : {},
+      hmr: {
+        port: 24679,
+      },
+      proxy: {
+        '/api': 'http://localhost:5000',
+        '/ws': {
+          target: 'ws://localhost:5000',
+          ws: true,
+        },
+      },
     },
   };
 });
