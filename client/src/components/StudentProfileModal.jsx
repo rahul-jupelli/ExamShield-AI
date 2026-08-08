@@ -21,12 +21,14 @@ export default function StudentProfileModal({
   student = {}, 
   role, 
   onClose, 
-  onUpdateDecision 
+  onUpdateDecision,
+  theme = 'dark'
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState('profile');
 
   const isControllerOrAdmin = role === 'Exam Controller' || role === 'Admin';
+  const isLight = theme === 'light';
 
   const handleDecisionChange = async (decision) => {
     setSubmitting(true);
@@ -50,20 +52,28 @@ export default function StudentProfileModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Background overlay */}
-      <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md" onClick={onClose} />
+      <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-md" onClick={onClose} />
       
       {/* Modal content glass box */}
-      <div className="relative w-full max-w-4xl max-h-[90vh] bg-[#020617] border border-blue-900/30 rounded-3xl overflow-hidden shadow-2xl flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200">
+      <div className={`relative w-full max-w-4xl max-h-[90vh] border rounded-3xl overflow-hidden shadow-2xl flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200 transition-colors ${
+        isLight 
+          ? 'bg-white border-slate-200 text-slate-900 shadow-slate-300/50' 
+          : 'bg-[#020617] border-blue-900/40 text-slate-100 shadow-blue-950/80'
+      }`}>
         
         {/* Top Header */}
-        <div className="px-6 py-4 border-b border-blue-900/30 flex items-center justify-between bg-slate-950/40">
+        <div className={`px-6 py-4 border-b flex items-center justify-between ${
+          isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/40 border-blue-900/30'
+        }`}>
           <div className="flex items-center gap-2">
-            <User className="h-5 w-5 text-blue-400" />
-            <span className="text-sm font-bold font-mono tracking-wider text-slate-300 uppercase">SYS_PROFILE_QUERY // {student.id}</span>
+            <User className={`h-5 w-5 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
+            <span className={`text-sm font-bold font-mono tracking-wider uppercase ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>SYS_PROFILE_QUERY // {student.id}</span>
           </div>
           <button 
             onClick={onClose}
-            className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-blue-950/40 transition-all cursor-pointer"
+            className={`p-1.5 rounded-lg transition-all cursor-pointer ${
+              isLight ? 'text-slate-400 hover:text-slate-900 hover:bg-slate-200' : 'text-slate-400 hover:text-white hover:bg-blue-950/40'
+            }`}
           >
             <X className="h-5 w-5" />
           </button>

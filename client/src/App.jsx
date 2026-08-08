@@ -26,6 +26,28 @@ export default function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Theme State: 'dark' | 'light'
+  const [theme, setTheme] = useState(() => localStorage.getItem('examshield_theme') || 'dark');
+
+  const toggleTheme = () => {
+    setTheme((prev) => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('examshield_theme', next);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    localStorage.setItem('examshield_theme', theme);
+    if (theme === 'light') {
+      document.documentElement.classList.add('light');
+      document.documentElement.classList.remove('dark');
+    } else {
+      document.documentElement.classList.add('dark');
+      document.documentElement.classList.remove('light');
+    }
+  }, [theme]);
+
   const formatUserData = (user) => {
     if (!user) return null;
     return {
@@ -185,8 +207,25 @@ export default function App() {
         fetch('/api/settings').then(r => r.json()),
       ]);
 
-      setStudents(studentsRes);
-      setAlerts(alertsRes);
+      // Deduplicate fetched students and alerts to keep original entries only
+      const uniqueStudentsMap = new Map();
+      (studentsRes || []).forEach(s => {
+        const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+        if (key && !uniqueStudentsMap.has(key)) {
+          uniqueStudentsMap.set(key, s);
+        }
+      });
+
+      const uniqueAlertsMap = new Map();
+      (alertsRes || []).forEach(a => {
+        const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
+        if (key && !uniqueAlertsMap.has(key)) {
+          uniqueAlertsMap.set(key, a);
+        }
+      });
+
+      setStudents(Array.from(uniqueStudentsMap.values()));
+      setAlerts(Array.from(uniqueAlertsMap.values()));
       setRover(roverRes);
       setMetrics(metricsRes);
       setLogs(logsRes);
@@ -240,13 +279,15 @@ export default function App() {
               break;
             case 'STUDENT_ADDED':
               setStudents(prev => {
-                if (prev.some(s => s.id === data.student.id)) return prev;
+                const key = (data.student.hallTicket || data.student.name || data.student.id || '').trim().toLowerCase();
+                if (prev.some(s => (s.hallTicket || s.name || s.id || '').trim().toLowerCase() === key)) return prev;
                 return [...prev, data.student];
               });
               break;
             case 'NEW_ALERT':
               setAlerts(prev => {
-                if (prev.some(a => a.id === data.alert.id)) return prev;
+                const key = (data.alert.id || (data.alert.title + '_' + data.alert.location)).trim().toLowerCase();
+                if (prev.some(a => (a.id || (a.title + '_' + a.location)).trim().toLowerCase() === key)) return prev;
                 return [data.alert, ...prev];
               });
               setToastNotification(data.alert);
@@ -380,6 +421,8 @@ export default function App() {
     return (
       <LoginView
         onLoginSuccess={(user) => setSession(formatUserData(user))}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
     );
   }
@@ -404,6 +447,7 @@ export default function App() {
             rover={rover}
             alerts={alerts}
             onSelectStudent={(s) => setSelectedStudent(s)}
+            theme={theme}
           />
         );
       case 'rover':
@@ -412,6 +456,7 @@ export default function App() {
             rover={rover}
             role={session.role}
             onSendCommand={handleSendCommand}
+            theme={theme}
           />
         );
       case 'alerts':
@@ -421,6 +466,7 @@ export default function App() {
             role={session.role}
             onResolveAlert={handleResolveAlert}
             onTriggerAlert={handleTriggerMockAlert}
+            theme={theme}
           />
         );
       case 'reports':
@@ -429,19 +475,22 @@ export default function App() {
             students={students}
             role={session.role}
             operatorName={session.fullName}
+            theme={theme}
           />
         );
       case 'analytics':
-        return <AnalyticsView />;
+        return <AnalyticsView theme={theme} />;
       case 'health':
-        return <HealthView metrics={metrics} />;
+        return <HealthView metrics={metrics} theme={theme} />;
       case 'history':
-        return <HistoryView logs={logs} />;
+        return <HistoryView logs={logs} theme={theme} />;
       case 'settings':
         return (
           <SettingsView
             settings={settings}
             onSaveSettings={handleSaveSettings}
+            theme={theme}
+            onToggleTheme={toggleTheme}
           />
         );
       default:
@@ -450,7 +499,9 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#010409] text-slate-200 flex font-sans overflow-x-hidden">
+    <div className={`min-h-screen flex font-sans overflow-x-hidden transition-colors duration-200 ${
+      theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#010409] text-slate-200'
+    }`}>
 
       {/* Dynamic Toast alert notifications banner */}
       {toastNotification && (
@@ -479,11 +530,13 @@ export default function App() {
         wsConnected={wsConnected}
         mobileOpen={mobileSidebarOpen}
         setMobileOpen={setMobileSidebarOpen}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
-      {/* Main Content scroll window */}
-      <main className="flex-1 min-w-0 lg:pl-64 pt-20 lg:pt-6 p-6 min-h-screen flex flex-col justify-between print:pl-0 print:pt-0">
-        <div className="space-y-6">
+      {/* Main Content scroll window with comfortable distance from sidebar */}
+      <main className="flex-1 min-w-0 lg:pl-72 lg:pr-8 pt-20 lg:pt-8 p-6 min-h-screen flex flex-col justify-between print:pl-0 print:pt-0">
+        <div className="space-y-8">
 
           {/* Telemetry Warning banner */}
           {showOfflineBanner && (
@@ -520,6 +573,7 @@ export default function App() {
         <StudentProfileModal
           student={students.find(s => s.id === selectedStudent.id) || selectedStudent}
           role={session.role}
+          theme={theme}
           onClose={() => setSelectedStudent(null)}
           onUpdateDecision={(sId, dec) => {
             setStudents(prev => prev.map(s => s.id === sId ? {

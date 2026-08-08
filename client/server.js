@@ -19,8 +19,87 @@ const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_Dx
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // ==========================================
+// Database Deduplication Utility Function
+// ==========================================
+async function cleanDuplicateDatabaseRecords() {
+  console.log('[DEDUPLICATION] Running database cleanup for public tables...');
+  try {
+    // 1. Clean Duplicate Students in Supabase
+    const { data: allStudents, error: fetchStudentsErr } = await supabase.from('students').select('*').order('id');
+    if (!fetchStudentsErr && allStudents && allStudents.length > 0) {
+      const seenTicketMap = new Map();
+      const duplicateStudentIdsToDelete = [];
+
+      for (const student of allStudents) {
+        const key = (student.hallTicket || student.name || '').trim().toLowerCase();
+        if (!key) continue;
+
+        if (seenTicketMap.has(key)) {
+          duplicateStudentIdsToDelete.push(student.id);
+        } else {
+          seenTicketMap.set(key, student);
+        }
+      }
+
+      if (duplicateStudentIdsToDelete.length > 0) {
+        console.log(`[DEDUPLICATION] Found ${duplicateStudentIdsToDelete.length} duplicate student records in Supabase. Removing...`);
+        const { error: delErr } = await supabase.from('students').delete().in('id', duplicateStudentIdsToDelete);
+        if (delErr) {
+          console.error('[DEDUPLICATION] Delete student duplicates error:', delErr.message);
+        } else {
+          console.log(`[DEDUPLICATION] Cleaned ${duplicateStudentIdsToDelete.length} duplicate student records.`);
+        }
+      } else {
+        console.log('[DEDUPLICATION] Students table is clean. No duplicates found.');
+      }
+    }
+
+    // 2. Clean Duplicate Live Alerts in Supabase
+    const { data: allAlerts, error: fetchAlertsErr } = await supabase.from('live_alerts').select('*').order('timestamp', { ascending: false });
+    if (!fetchAlertsErr && allAlerts && allAlerts.length > 0) {
+      const seenAlertMap = new Map();
+      const duplicateAlertIdsToDelete = [];
+
+      for (const alert of allAlerts) {
+        const key = (alert.title + '_' + (alert.location || '')).trim().toLowerCase();
+        if (!key) continue;
+
+        if (seenAlertMap.has(key)) {
+          duplicateAlertIdsToDelete.push(alert.id);
+        } else {
+          seenAlertMap.set(key, alert);
+        }
+      }
+
+      if (duplicateAlertIdsToDelete.length > 0) {
+        console.log(`[DEDUPLICATION] Found ${duplicateAlertIdsToDelete.length} duplicate alert records in Supabase. Removing...`);
+        const { error: delErr } = await supabase.from('live_alerts').delete().in('id', duplicateAlertIdsToDelete);
+        if (delErr) {
+          console.error('[DEDUPLICATION] Delete alert duplicates error:', delErr.message);
+        } else {
+          console.log(`[DEDUPLICATION] Cleaned ${duplicateAlertIdsToDelete.length} duplicate alert records.`);
+        }
+      } else {
+        console.log('[DEDUPLICATION] Live alerts table is clean. No duplicates found.');
+      }
+    }
+  } catch (err) {
+    console.error('[DEDUPLICATION] Error performing database cleanup:', err.message);
+  }
+}
+
+// Run cleanup immediately on server startup
+cleanDuplicateDatabaseRecords();
+
+// ==========================================
 // API REST Routes (Fetching & Persisting in Supabase)
 // ==========================================
+
+// Deduplication Endpoint
+app.post('/api/cleanup-duplicates', async (req, res) => {
+  await cleanDuplicateDatabaseRecords();
+  res.json({ success: true, message: 'Database deduplication check completed.' });
+});
 
 // Health Check - Supabase connectivity
 app.get('/api/health', async (req, res) => {
@@ -65,12 +144,22 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
-// Students
+// Students (Deduplicated response)
 app.get('/api/students', async (req, res) => {
   try {
     const { data, error } = await supabase.from('students').select('*').order('id');
     if (error) throw error;
-    res.json(data || []);
+    
+    // Deduplicate by hallTicket / name / id to keep original rows only
+    const uniqueMap = new Map();
+    (data || []).forEach(s => {
+      const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, s);
+      }
+    });
+
+    res.json(Array.from(uniqueMap.values()));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -188,12 +277,22 @@ app.post('/api/rover/control', async (req, res) => {
   }
 });
 
-// Alerts
+// Alerts (Deduplicated response)
 app.get('/api/alerts', async (req, res) => {
   try {
     const { data, error } = await supabase.from('live_alerts').select('*').order('timestamp', { ascending: false });
     if (error) throw error;
-    res.json(data || []);
+    
+    // Deduplicate by title & location or id
+    const uniqueMap = new Map();
+    (data || []).forEach(a => {
+      const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
+      if (!uniqueMap.has(key)) {
+        uniqueMap.set(key, a);
+      }
+    });
+
+    res.json(Array.from(uniqueMap.values()));
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
@@ -313,7 +412,30 @@ wss.on('connection', async (ws) => {
       supabase.from('students').select('*').order('id')
     ]);
 
-    ws.send(JSON.stringify({ type: 'INITIAL_STATE', rover, metrics, alerts: alerts || [], students: students || [] }));
+    // Deduplicate students before broadcasting initial state over WebSocket
+    const uniqueStudentMap = new Map();
+    (students || []).forEach(s => {
+      const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+      if (!uniqueStudentMap.has(key)) {
+        uniqueStudentMap.set(key, s);
+      }
+    });
+
+    const uniqueAlertMap = new Map();
+    (alerts || []).forEach(a => {
+      const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
+      if (!uniqueAlertMap.has(key)) {
+        uniqueAlertMap.set(key, a);
+      }
+    });
+
+    ws.send(JSON.stringify({ 
+      type: 'INITIAL_STATE', 
+      rover, 
+      metrics, 
+      alerts: Array.from(uniqueAlertMap.values()), 
+      students: Array.from(uniqueStudentMap.values()) 
+    }));
   } catch (err) {
     console.error("Error fetching initial state from Supabase for WebSocket:", err);
   }
@@ -353,7 +475,7 @@ function broadcast(data) {
   }
 }
 
-// Simulated active updates (patrolling, battery drain, inference jitter)
+// Simulated active telemetry updates (patrolling, battery drain, inference jitter)
 setInterval(async () => {
   try {
     const { data: roverStatus } = await supabase.from('rover_status').select('*').eq('id', 1).single();
@@ -407,131 +529,6 @@ setInterval(async () => {
     // Background simulation error handler
   }
 }, 4000);
-
-// Occasional Mock Random Flagging Event (saving to Supabase)
-let mockIndex = 0;
-const MOCK_NAMES = ['Karan Singhania', 'Esha Dutta', 'Vivek Prasanna', 'Tina Kapur'];
-const MOCK_BRANCHES = ['Information Tech', 'Cybersecurity', 'Electrical Eng', 'Mechanical Eng'];
-const MOCK_PHOTOS = [
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=150&auto=format&fit=crop&q=80'
-];
-
-setInterval(async () => {
-  if (clients.size === 0) return;
-
-  const rand = Math.random();
-  const timeStr = new Date().toISOString();
-
-  try {
-    if (rand > 0.6) {
-      const name = MOCK_NAMES[mockIndex % MOCK_NAMES.length];
-      const branch = MOCK_BRANCHES[mockIndex % MOCK_BRANCHES.length];
-      const ticket = `HT2026S` + (700 + mockIndex);
-      const seatRow = String.fromCharCode(65 + (mockIndex % 6)) + '-' + (mockIndex + 1);
-
-      const newStudent = {
-        id: 'mock_v_' + mockIndex,
-        name,
-        hallTicket: ticket,
-        branch,
-        room: 'LH-302',
-        seat: `Row ${seatRow}`,
-        photo: MOCK_PHOTOS[mockIndex % MOCK_PHOTOS.length],
-        status: 'Verified Safe',
-        verificationCompleted: true,
-        entryAllowed: true,
-        timestamp: timeStr,
-        faceConfidence: parseFloat((96.5 + Math.random() * 3).toFixed(1)),
-        entryDecision: 'Allowed',
-        verificationHistory: [`RFID Verification Completed`, `Facial Match Approved at Automated Entry Gate`],
-        violationHistory: []
-      };
-
-      await supabase.from('students').insert([newStudent]);
-      broadcast({ type: 'STUDENT_ADDED', student: newStudent });
-
-      const newLog = {
-        id: 'log_' + Date.now(),
-        frameUrl: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?w=500&auto=format&fit=crop&q=80',
-        detectedObjects: ['Person (Matched)', 'RFID Token Verified'],
-        confidence: newStudent.faceConfidence,
-        decision: 'Verified Safe (Green)',
-        operator: 'SysGate_Entry',
-        timestamp: timeStr,
-        hall: 'LH-302'
-      };
-      await supabase.from('ai_detection_logs').insert([newLog]);
-      broadcast({ type: 'LOG_ADDED', log: newLog });
-
-    } else if (rand > 0.3) {
-      const name = MOCK_NAMES[(mockIndex + 2) % MOCK_NAMES.length] + ' (Simulated)';
-      const branch = MOCK_BRANCHES[(mockIndex + 2) % MOCK_BRANCHES.length];
-      const ticket = `HT2026S` + (900 + mockIndex);
-      const seatRow = 'Row ' + String.fromCharCode(68 + (mockIndex % 3)) + '-' + (3 + mockIndex);
-
-      const score = Math.round(70 + Math.random() * 18);
-      const snapshot = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=500&auto=format&fit=crop&q=80';
-
-      const newStudent = {
-        id: 'mock_s_' + mockIndex,
-        name,
-        hallTicket: ticket,
-        branch,
-        room: 'LH-302',
-        seat: seatRow,
-        photo: MOCK_PHOTOS[(mockIndex + 1) % MOCK_PHOTOS.length],
-        status: 'Suspicious',
-        suspicionScore: score,
-        suspicionReason: 'Frequent looking under desk and nervous wrist gestures.',
-        timestamp: timeStr,
-        faceConfidence: parseFloat((94.1 + Math.random() * 4).toFixed(1)),
-        entryDecision: 'Pending',
-        verificationHistory: [`Facial recognition verification successful`, `Rover AI flagged posture: Neck angle deviated (${score}%)`],
-        violationHistory: ['Flagged via active camera Pose-Estimation algorithm.'],
-        snapshot
-      };
-
-      await supabase.from('students').insert([newStudent]);
-      broadcast({ type: 'STUDENT_ADDED', student: newStudent });
-
-      const newAlert = {
-        id: 'alert_' + Date.now(),
-        title: 'Suspicious Pose Activity Flagged',
-        priority: 'MEDIUM',
-        timestamp: timeStr,
-        location: `LH-302 (${seatRow})`,
-        actionTaken: 'Rover camera queued focal review. Triggered manual verification ticket.',
-        status: 'Active',
-        snapshot,
-        details: `${name} (${ticket}) exhibits posture pattern exceeding room baseline. High suspicion score of ${score}%.`
-      };
-
-      await supabase.from('live_alerts').insert([newAlert]);
-      broadcast({ type: 'NEW_ALERT', alert: newAlert });
-
-      const newLog = {
-        id: 'log_' + Date.now(),
-        frameUrl: snapshot,
-        detectedObjects: ['Nervous Posture Model', 'Nystagmus Eye Deviance'],
-        confidence: score,
-        decision: 'Suspicious Pose Flagged (Orange)',
-        operator: 'SysRover_Primary',
-        timestamp: timeStr,
-        hall: 'LH-302'
-      };
-      await supabase.from('ai_detection_logs').insert([newLog]);
-      broadcast({ type: 'LOG_ADDED', log: newLog });
-    }
-
-    mockIndex++;
-  } catch (err) {
-    // Event simulation error handler
-  }
-}, 45000);
-
 
 // ==========================================
 // Serve production build files

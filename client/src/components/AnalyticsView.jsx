@@ -17,8 +17,9 @@ import {
 import { BarChart3, TrendingUp, AlertTriangle, Zap, CheckCircle } from 'lucide-react';
 import GlassCard from './GlassCard';
 
-export default function AnalyticsView() {
-  
+export default function AnalyticsView({ theme = 'dark' }) {
+  const isLight = theme === 'light';
+
   // 1. Data: Student verified vs flagged
   const verificationData = [
     { name: 'Cleared Safe', value: 142, color: '#10b981' },
@@ -28,10 +29,10 @@ export default function AnalyticsView() {
 
   // 2. Data: Device Types Detected
   const deviceTypeData = [
-    { name: 'Smart Watches', count: 18, fill: '#60a5fa' },
-    { name: 'Micro Earbuds', count: 9, fill: '#38bdf8' },
-    { name: 'Smartphones', count: 14, fill: '#0ea5e9' },
-    { name: 'Bluetooth Beacons', count: 5, fill: '#a855f7' },
+    { name: 'Smart Watches', count: 18, fill: '#3b82f6' },
+    { name: 'Micro Earbuds', count: 9, fill: '#0ea5e9' },
+    { name: 'Smartphones', count: 14, fill: '#06b6d4' },
+    { name: 'Bluetooth Beacons', count: 5, fill: '#8b5cf6' },
   ];
 
   // 3. Data: Violations per Hour (10:00 AM - 01:00 PM)
@@ -58,161 +59,189 @@ export default function AnalyticsView() {
     { elapsed: '210m', battery: 42, temperature: 41.5 },
   ];
 
-  // 5. Data: Exam Hall Incident Distributions
-  const hallIncidents = [
-    { name: 'LH-302', incidents: 14 },
-    { name: 'LH-304', incidents: 6 },
-    { name: 'Main Gym', incidents: 2 },
-    { name: 'Block-C Lab', incidents: 8 },
-  ];
+  const gridColor = isLight ? '#e2e8f0' : '#1e293b';
+  const textColor = isLight ? '#64748b' : '#94a3b8';
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-7 pb-8">
       
-      {/* Header Banner */}
-      <div>
-        <h1 className="text-2xl font-extrabold text-white flex items-center gap-2">
-          Examination Security Analytics
-          <BarChart3 className="h-5 w-5 text-blue-400" />
-        </h1>
-        <p className="text-slate-400 text-xs mt-0.5">Statistical distributions of verified students, device types, and rover battery degradation curves.</p>
+      {/* 1. Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className={`text-2xl sm:text-3xl font-extrabold flex items-center gap-2.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+            Exam Security Analytics & Intelligence
+            <BarChart3 className="h-6 w-6 text-blue-500" />
+          </h1>
+          <p className={`text-xs sm:text-sm mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
+            Aggregated metrics for candidate verification rates, device spectrum signatures, and rover efficiency.
+          </p>
+        </div>
       </div>
 
-      {/* Bento Grid Analytics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+      {/* 2. Top Summary Stat Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <GlassCard theme={theme} className="p-5 flex items-center gap-4">
+          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+            isLight ? 'bg-emerald-100 text-emerald-600' : 'bg-emerald-500/20 text-emerald-400'
+          }`}>
+            <CheckCircle className="h-6 w-6" />
+          </div>
+          <div>
+            <span className={`block text-xs font-mono font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Overall Clearance</span>
+            <span className={`text-2xl font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>94.2%</span>
+            <span className="block text-[10px] text-emerald-500 font-semibold mt-0.5">142 verified gate passes</span>
+          </div>
+        </GlassCard>
+
+        <GlassCard theme={theme} className="p-5 flex items-center gap-4">
+          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+            isLight ? 'bg-rose-100 text-rose-600' : 'bg-rose-500/20 text-rose-400'
+          }`}>
+            <AlertTriangle className="h-6 w-6" />
+          </div>
+          <div>
+            <span className={`block text-xs font-mono font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Device Intercepts</span>
+            <span className={`text-2xl font-extrabold ${isLight ? 'text-rose-600' : 'text-rose-400'}`}>4 Confirmed</span>
+            <span className="block text-[10px] text-rose-500 font-semibold mt-0.5">12 flagged for review</span>
+          </div>
+        </GlassCard>
+
+        <GlassCard theme={theme} className="p-5 flex items-center gap-4">
+          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+            isLight ? 'bg-blue-100 text-blue-600' : 'bg-blue-500/20 text-cyan-400'
+          }`}>
+            <TrendingUp className="h-6 w-6" />
+          </div>
+          <div>
+            <span className={`block text-xs font-mono font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>CV Model FPS</span>
+            <span className={`text-2xl font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>29.8</span>
+            <span className="block text-[10px] text-blue-500 font-semibold mt-0.5">32.4ms inference time</span>
+          </div>
+        </GlassCard>
+
+        <GlassCard theme={theme} className="p-5 flex items-center gap-4">
+          <div className={`h-12 w-12 rounded-2xl flex items-center justify-center flex-shrink-0 ${
+            isLight ? 'bg-amber-100 text-amber-600' : 'bg-amber-500/20 text-amber-400'
+          }`}>
+            <Zap className="h-6 w-6" />
+          </div>
+          <div>
+            <span className={`block text-xs font-mono font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Rover Range</span>
+            <span className={`text-2xl font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>3.2 km</span>
+            <span className="block text-[10px] text-amber-500 font-semibold mt-0.5">88% remaining battery</span>
+          </div>
+        </GlassCard>
+      </div>
+
+      {/* 3. Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Chart 1: Verification Funnel distribution (5 cols) */}
-        <GlassCard className="lg:col-span-5 p-5 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider mb-1">Entry Verification Funnel</h3>
-            <p className="text-[10px] text-slate-500 mb-4">Total breakdown of scanned student compliance classifications.</p>
-          </div>
+        {/* Verification Ratio Pie Chart */}
+        <div className="lg:col-span-6">
+          <GlassCard theme={theme} className="p-6 space-y-4">
+            <h3 className={`text-xs font-bold font-mono uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+              Candidate Verification Ratio Breakdown
+            </h3>
 
-          <div className="h-56 flex items-center justify-center">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={verificationData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {verificationData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', color: '#fff', fontSize: '11px' }} 
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={verificationData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={85}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {verificationData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: isLight ? '#ffffff' : '#0f172a', 
+                      borderColor: isLight ? '#cbd5e1' : '#334155',
+                      borderRadius: '12px',
+                      color: isLight ? '#0f172a' : '#ffffff',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Legend 
+                    verticalAlign="bottom" 
+                    height={36} 
+                    formatter={(value) => <span style={{ color: textColor, fontSize: '11px', fontWeight: 'bold' }}>{value}</span>}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        </div>
 
-          {/* Custom Legends list */}
-          <div className="grid grid-cols-3 gap-2 text-[10px] font-mono mt-4 pt-4 border-t border-blue-900/20">
-            {verificationData.map((d, i) => (
-              <div key={i} className="text-center">
-                <span className="block font-bold" style={{ color: d.color }}>{d.value} Students</span>
-                <span className="text-slate-500 mt-0.5 block">{d.name}</span>
-              </div>
-            ))}
-          </div>
-        </GlassCard>
+        {/* Devices Detected Bar Chart */}
+        <div className="lg:col-span-6">
+          <GlassCard theme={theme} className="p-6 space-y-4">
+            <h3 className={`text-xs font-bold font-mono uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+              Detected Device Spectrum Types
+            </h3>
 
-        {/* Chart 2: Device Counts (7 cols) */}
-        <GlassCard className="lg:col-span-7 p-5 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider mb-1">Identified Devices By Form Factor</h3>
-            <p className="text-[10px] text-slate-500 mb-4">Total positive detections by spectrum radio telemetry and computerized optical filters.</p>
-          </div>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={deviceTypeData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                  <XAxis dataKey="name" stroke={textColor} fontSize={10} tickLine={false} />
+                  <YAxis stroke={textColor} fontSize={10} tickLine={false} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: isLight ? '#ffffff' : '#0f172a', 
+                      borderColor: isLight ? '#cbd5e1' : '#334155',
+                      borderRadius: '12px',
+                      color: isLight ? '#0f172a' : '#ffffff',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Bar dataKey="count" radius={[8, 8, 0, 0]}>
+                    {deviceTypeData.map((entry, index) => (
+                      <Cell key={`bar-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        </div>
 
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={deviceTypeData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" stroke="#94a3b8" fontSize={9} />
-                <YAxis stroke="#94a3b8" fontSize={9} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} />
-                <Bar dataKey="count" radius={[8, 8, 0, 0]}>
-                  {deviceTypeData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+        {/* Hourly Scans & Flagged Candidates */}
+        <div className="lg:col-span-12">
+          <GlassCard theme={theme} className="p-6 space-y-4">
+            <h3 className={`text-xs font-bold font-mono uppercase tracking-wider ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>
+              Hourly Scan Telemetry vs Flagged Deviations
+            </h3>
 
-          <div className="text-[10px] text-slate-500 text-center font-mono mt-2 pt-2 border-t border-blue-900/20">
-            Smart Watches remain the highest threat segment, representing 40.9% of flagged contraband.
-          </div>
-        </GlassCard>
-
-        {/* Chart 3: Violations per Hour (Line Chart) (8 cols) */}
-        <GlassCard className="lg:col-span-8 p-5 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider mb-1">Hourly Activity & Scans Curve</h3>
-            <p className="text-[10px] text-slate-500 mb-4">Tracking overall student gate sweeps against flagged security deviations over time.</p>
-          </div>
-
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={hourlyViolations} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="hour" stroke="#94a3b8" fontSize={9} />
-                <YAxis stroke="#94a3b8" fontSize={9} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} />
-                <Legend wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace' }} />
-                <Line type="monotone" dataKey="scans" stroke="#3b82f6" strokeWidth={2.5} name="Total Scans" dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="flagged" stroke="#ef4444" strokeWidth={2.5} name="Detections (Flags)" dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-
-        {/* Chart 4: Exam Hall Incidents Distribution (4 cols) */}
-        <GlassCard className="lg:col-span-4 p-5 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider mb-1">Violation Frequency by Room</h3>
-            <p className="text-[10px] text-slate-500 mb-4">Comparing infraction density index across active examination rooms.</p>
-          </div>
-
-          <div className="h-60">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hallIncidents} layout="vertical" margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis type="number" stroke="#94a3b8" fontSize={9} />
-                <YAxis dataKey="name" type="category" stroke="#94a3b8" fontSize={9} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} />
-                <Bar dataKey="incidents" fill="#a855f7" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
-
-        {/* Chart 5: Battery Decay Curve (12 cols) */}
-        <GlassCard className="lg:col-span-12 p-5 flex flex-col justify-between">
-          <div>
-            <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider mb-1">Chassis Thermal & Battery Discharge History</h3>
-            <p className="text-[10px] text-slate-500 mb-4">Correlating continuous drive motor speeds with internal CPU thermal sensor rises.</p>
-          </div>
-
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={batteryUsage} margin={{ top: 10, right: 15, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="elapsed" stroke="#94a3b8" fontSize={9} />
-                <YAxis stroke="#94a3b8" fontSize={9} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: 'rgba(255,255,255,0.1)', borderRadius: '12px', fontSize: '11px' }} />
-                <Legend wrapperStyle={{ fontSize: '10px', fontFamily: 'monospace' }} />
-                <Line type="monotone" dataKey="battery" stroke="#10b981" strokeWidth={2} name="Battery Reserve (%)" />
-                <Line type="monotone" dataKey="temperature" stroke="#f59e0b" strokeWidth={2} name="CPU Core Temperature (°C)" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </GlassCard>
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={hourlyViolations}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} />
+                  <XAxis dataKey="hour" stroke={textColor} fontSize={11} />
+                  <YAxis stroke={textColor} fontSize={11} />
+                  <Tooltip 
+                    contentStyle={{ 
+                      backgroundColor: isLight ? '#ffffff' : '#0f172a', 
+                      borderColor: isLight ? '#cbd5e1' : '#334155',
+                      borderRadius: '12px',
+                      color: isLight ? '#0f172a' : '#ffffff',
+                      fontSize: '12px'
+                    }} 
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="scans" stroke="#3b82f6" strokeWidth={3} name="Total Scans" />
+                  <Line type="monotone" dataKey="flagged" stroke="#f43f5e" strokeWidth={3} name="Flagged Infractions" />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </GlassCard>
+        </div>
 
       </div>
 
