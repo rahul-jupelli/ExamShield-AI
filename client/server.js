@@ -13,8 +13,13 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 
 // Initialize Supabase Client
-const supabaseUrl = process.env.VITE_SUPABASE_URL || "https://ylhryvakpswdgapooica.supabase.co";
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_DxCOoa3jXlXkhflv_sStjw_dRNjSd7I";
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('FATAL: VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set in the .env file.');
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
