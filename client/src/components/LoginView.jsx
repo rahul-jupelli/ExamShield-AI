@@ -160,22 +160,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
 
   return (
     <div className={`min-h-screen lg:h-screen w-full flex items-center justify-center p-3 sm:p-5 lg:p-6 relative overflow-x-hidden overflow-y-auto lg:overflow-hidden font-sans transition-colors duration-300 ${
-      isLight ? 'bg-slate-100 text-slate-900' : 'bg-[#020617] text-slate-200'
+      isLight ? 'bg-slate-50 text-slate-900' : 'bg-[#090d16] text-slate-200'
     }`}>
-      
-      {/* Ambient background glow effects */}
-      {isLight ? (
-        <>
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(59,130,246,0.12),rgba(255,255,255,0))]" />
-          <div className="absolute top-1/4 left-1/5 h-[350px] w-[350px] rounded-full bg-blue-400/10 blur-[120px] pointer-events-none" />
-        </>
-      ) : (
-        <>
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(14,165,233,0.15),rgba(255,255,255,0))]" />
-          <div className="absolute top-1/4 left-1/5 h-[350px] w-[350px] rounded-full bg-blue-600/10 blur-[120px] pointer-events-none animate-pulse" />
-          <div className="absolute bottom-1/4 right-1/5 h-[300px] w-[300px] rounded-full bg-cyan-500/10 blur-[100px] pointer-events-none" />
-        </>
-      )}
 
       {/* Top Floating Theme Switcher Button */}
       {onToggleTheme && (
@@ -183,10 +169,10 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
           type="button"
           onClick={onToggleTheme}
           title={isLight ? "Switch to Dark Mode" : "Switch to Light Mode"}
-          className={`absolute top-4 right-4 z-50 p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-2 shadow-lg ${
+          className={`absolute top-4 right-4 z-50 p-2.5 rounded-2xl border transition-all cursor-pointer flex items-center gap-2 shadow-sm ${
             isLight
-              ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-blue-400 shadow-slate-200'
-              : 'bg-slate-900/80 border-blue-900/40 text-cyan-300 hover:border-cyan-400/60 shadow-blue-950/50'
+              ? 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400'
+              : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-800'
           }`}
         >
           {isLight ? <Moon className="h-4 w-4 text-blue-600" /> : <Sun className="h-4 w-4 text-amber-400" />}
@@ -197,14 +183,14 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
       <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-6 relative z-10 my-auto max-h-full">
 
         {/* Left Side: Brand & Feature Showcase */}
-        <div className={`lg:col-span-7 flex flex-col justify-between p-5 sm:p-6 lg:p-7 rounded-3xl border shadow-2xl relative overflow-hidden transition-all ${
+        <div className={`lg:col-span-7 flex flex-col justify-between p-5 sm:p-6 lg:p-7 rounded-3xl border shadow-xl relative overflow-hidden transition-all ${
           isLight
-            ? 'bg-white/80 border-slate-200 backdrop-blur-xl shadow-slate-300/50 text-slate-900'
-            : 'bg-slate-900/50 border-blue-500/20 backdrop-blur-xl shadow-blue-950/50 text-slate-200'
+            ? 'bg-white border-slate-200 text-slate-900'
+            : 'bg-slate-900/80 border-slate-800 text-slate-200'
         }`}>
           
-          {/* Subtle top ambient glowing border accent */}
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-600 via-cyan-400 to-indigo-600 opacity-80" />
+          {/* Subtle top border accent */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-blue-600" />
 
           <div>
             {/* Header & Logo */}
@@ -213,19 +199,17 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                 <div className={`h-10 w-10 rounded-xl flex items-center justify-center border ${
                   isLight
                     ? 'bg-blue-50 border-blue-200 shadow-sm'
-                    : 'bg-gradient-to-br from-blue-600/30 to-cyan-500/20 border-cyan-400/40 shadow-[0_0_15px_rgba(14,165,233,0.25)]'
+                    : 'bg-blue-600/20 border-blue-500/30'
                 }`}>
-                  <Shield className={`h-5 w-5 ${isLight ? 'text-blue-600' : 'text-cyan-300'}`} />
+                  <Shield className={`h-5 w-5 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
                 </div>
                 <div>
                   <span className={`text-xl sm:text-2xl font-extrabold tracking-tight block ${
-                    isLight
-                      ? 'bg-gradient-to-r from-blue-700 via-blue-600 to-slate-900 bg-clip-text text-transparent'
-                      : 'bg-gradient-to-r from-blue-400 via-cyan-300 to-white bg-clip-text text-transparent'
+                    isLight ? 'text-slate-900' : 'text-white'
                   }`}>
                     ExamShield AI
                   </span>
-                  <span className={`text-[9px] font-mono tracking-widest uppercase ${isLight ? 'text-blue-600 font-semibold' : 'text-cyan-400'}`}>
+                  <span className={`text-[9px] font-mono tracking-widest uppercase ${isLight ? 'text-blue-600 font-semibold' : 'text-blue-400'}`}>
                     Autonomous Telemetry Suite
                   </span>
                 </div>
@@ -235,7 +219,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
               <div className={`hidden sm:flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[10px] font-mono ${
                 isLight
                   ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-semibold'
-                  : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.15)]'
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
               }`}>
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping" />
                 <span>GATEWAY ACTIVE</span>
@@ -259,13 +243,13 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
             <div className="space-y-2.5 sm:space-y-3">
               <div className={`flex gap-3.5 p-3.5 sm:p-4 rounded-2xl border transition-all duration-300 shadow-sm ${
                 isLight
-                  ? 'bg-slate-50 border-slate-200 hover:border-blue-300'
-                  : 'bg-blue-950/30 border-blue-800/30 hover:border-cyan-500/40'
+                  ? 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
               }`}>
                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center border flex-shrink-0 mt-0.5 ${
                   isLight
-                    ? 'bg-blue-100/70 border-blue-200 text-blue-600'
-                    : 'bg-cyan-500/10 border-cyan-500/20 text-cyan-400'
+                    ? 'bg-blue-50 border-blue-200 text-blue-600'
+                    : 'bg-blue-600/15 border-blue-500/20 text-blue-400'
                 }`}>
                   <Cpu className="h-4.5 w-4.5" />
                 </div>
@@ -279,13 +263,13 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
 
               <div className={`flex gap-3.5 p-3.5 sm:p-4 rounded-2xl border transition-all duration-300 shadow-sm ${
                 isLight
-                  ? 'bg-slate-50 border-slate-200 hover:border-blue-300'
-                  : 'bg-blue-950/30 border-blue-800/30 hover:border-blue-500/40'
+                  ? 'bg-slate-50 border-slate-200 hover:border-slate-300'
+                  : 'bg-slate-900/60 border-slate-800 hover:border-slate-700'
               }`}>
                 <div className={`h-9 w-9 rounded-xl flex items-center justify-center border flex-shrink-0 mt-0.5 ${
                   isLight
-                    ? 'bg-blue-100/70 border-blue-200 text-blue-600'
-                    : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                    ? 'bg-blue-50 border-blue-200 text-blue-600'
+                    : 'bg-blue-600/15 border-blue-500/20 text-blue-400'
                 }`}>
                   <Terminal className="h-4.5 w-4.5" />
                 </div>
@@ -301,14 +285,14 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
 
           {/* Footer Status Metadata */}
           <div className={`pt-4 mt-4 lg:pt-5 lg:mt-5 border-t flex items-center justify-between text-[11px] font-mono ${
-            isLight ? 'border-slate-200 text-slate-500' : 'border-blue-900/30 text-slate-500'
+            isLight ? 'border-slate-200 text-slate-500' : 'border-slate-800 text-slate-500'
           }`}>
             <span className="flex items-center gap-1.5">
-              <Lock className={`h-3 w-3 ${isLight ? 'text-blue-600' : 'text-cyan-400'}`} />
+              <Lock className={`h-3 w-3 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
               <span>CHASSIS: SECURITY ROVER MONITOR</span>
             </span>
             <span className={`px-2 py-0.5 rounded border text-[10px] font-bold ${
-              isLight ? 'bg-slate-100 border-slate-300 text-blue-700' : 'bg-blue-950/60 border-blue-800/40 text-cyan-300'
+              isLight ? 'bg-slate-100 border-slate-300 text-blue-700' : 'bg-slate-900 border-slate-800 text-blue-400'
             }`}>
               v2.8.4-ADMIN
             </span>
@@ -316,23 +300,23 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
         </div>
 
         {/* Right Side: Auth Form Card */}
-        <div className={`lg:col-span-5 p-5 sm:p-6 lg:p-7 rounded-3xl border shadow-2xl relative overflow-hidden flex flex-col justify-between transition-all ${
+        <div className={`lg:col-span-5 p-5 sm:p-6 lg:p-7 rounded-3xl border shadow-xl relative overflow-hidden flex flex-col justify-between transition-all ${
           isLight
-            ? 'bg-white/90 border-slate-200 backdrop-blur-xl shadow-slate-300/50 text-slate-900'
-            : 'bg-slate-900/60 border-blue-500/30 backdrop-blur-xl shadow-blue-500/10 text-slate-200'
+            ? 'bg-white border-slate-200 text-slate-900'
+            : 'bg-slate-900/80 border-slate-800 text-slate-200'
         }`}>
           
           <div>
             {/* Mode Switch Segment Tabs */}
-            <div className={`flex p-1 rounded-2xl border mb-4 lg:mb-5 shadow-inner ${
-              isLight ? 'bg-slate-100 border-slate-300' : 'bg-[#010409] border-blue-900/40'
+            <div className={`flex p-1 rounded-2xl border mb-4 lg:mb-5 ${
+              isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-slate-800'
             }`}>
               <button
                 type="button"
                 onClick={() => switchMode('signin')}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   mode === 'signin'
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -343,7 +327,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                 onClick={() => switchMode('signup')}
                 className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   mode === 'signup'
-                    ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
+                    ? 'bg-blue-600 text-white shadow-sm'
                     : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -369,7 +353,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
 
             {/* Error Notification */}
             {errorMessage && (
-              <div className="p-3 mb-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs flex items-start gap-2.5 shadow-[0_0_15px_rgba(244,63,94,0.1)]">
+              <div className="p-3 mb-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300 text-xs flex items-start gap-2.5">
                 <AlertCircle className="h-4 w-4 text-rose-500 flex-shrink-0 mt-0.5" />
                 <span className="leading-tight">{errorMessage}</span>
               </div>
@@ -377,7 +361,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
 
             {/* Success Notification */}
             {successMessage && (
-              <div className="p-3 mb-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2.5 shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+              <div className="p-3 mb-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 text-xs flex items-start gap-2.5">
                 <CheckCircle2 className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
                 <span className="leading-tight">{successMessage}</span>
               </div>
@@ -402,8 +386,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="admin@examshield.edu"
                       className={`w-full border rounded-xl py-2 pl-9 pr-4 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                   </div>
@@ -418,7 +402,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       type="button"
                       onClick={() => switchMode('forgot')}
                       className={`text-[10px] cursor-pointer font-medium ${
-                        isLight ? 'text-blue-600 hover:text-blue-700' : 'text-cyan-400 hover:text-cyan-300'
+                        isLight ? 'text-blue-600 hover:text-blue-700' : 'text-blue-400 hover:text-blue-300'
                       }`}
                     >
                       Forgot password?
@@ -434,8 +418,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="Enter password..."
                       className={`w-full border rounded-xl py-2 pl-9 pr-9 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                     <button
@@ -451,7 +435,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-4 lg:mt-6 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold tracking-wide shadow-lg shadow-blue-500/20 active:translate-y-px transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full mt-4 lg:mt-6 bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold tracking-wide shadow-sm active:translate-y-px transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {loading ? (
                     <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -482,8 +466,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="Dr. Admin Name"
                       className={`w-full border rounded-xl py-2 pl-9 pr-4 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                   </div>
@@ -503,8 +487,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="admin@examshield.edu"
                       className={`w-full border rounded-xl py-2 pl-9 pr-4 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                   </div>
@@ -524,8 +508,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="••••••••••••"
                       className={`w-full border rounded-xl py-2 pl-9 pr-9 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                     <button
@@ -552,8 +536,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="••••••••••••"
                       className={`w-full border rounded-xl py-2 pl-9 pr-9 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                     <button
@@ -569,7 +553,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-4 lg:mt-5 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold tracking-wide shadow-lg shadow-blue-500/20 active:translate-y-px transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full mt-4 lg:mt-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold tracking-wide shadow-sm active:translate-y-px transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {loading ? (
                     <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -600,8 +584,8 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                       placeholder="admin@examshield.edu"
                       className={`w-full border rounded-xl py-2 pl-9 pr-4 text-xs sm:text-sm focus:outline-none transition-all ${
                         isLight
-                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder:text-slate-400'
-                          : 'bg-[#010409] border-blue-900/40 text-white focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 placeholder:text-slate-600'
+                          ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-400'
+                          : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 placeholder:text-slate-600'
                       }`}
                     />
                   </div>
@@ -610,7 +594,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full mt-4 lg:mt-5 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 hover:from-blue-500 hover:to-cyan-500 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold tracking-wide shadow-lg shadow-blue-500/20 active:translate-y-px transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  className="w-full mt-4 lg:mt-5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl py-2.5 text-xs sm:text-sm font-bold tracking-wide shadow-sm active:translate-y-px transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
                   {loading ? (
                     <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />

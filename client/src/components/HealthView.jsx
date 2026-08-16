@@ -103,7 +103,7 @@ export default function HealthView({ metrics = {}, theme = 'dark' }) {
             <div 
               key={idx} 
               className={`p-4 rounded-2xl border flex items-start gap-4 transition-all shadow-sm ${
-                isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/40 border-blue-900/20'
+                isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/60 border-slate-800'
               }`}
             >
               <div className="mt-0.5">
@@ -116,8 +116,8 @@ export default function HealthView({ metrics = {}, theme = 'dark' }) {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className={`text-xs font-bold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>{service.name}</h4>
-                  <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded uppercase ${
-                    isLight ? 'bg-blue-100 text-blue-800' : 'bg-blue-950 text-cyan-400'
+                  <span className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded border uppercase ${
+                    isLight ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                   }`}>
                     {service.type}
                   </span>

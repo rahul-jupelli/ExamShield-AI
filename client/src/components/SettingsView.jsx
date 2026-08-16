@@ -84,7 +84,7 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
 
         <button
           onClick={handleSave}
-          className="px-5 py-2.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-blue-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20 active:translate-y-px transition-all cursor-pointer"
+          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm active:translate-y-px transition-all cursor-pointer"
         >
           <Save className="h-4 w-4" />
           <span>COMMIT ADJUSTMENTS</span>
@@ -116,7 +116,7 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
             </h3>
 
             <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl border transition-all ${
-              isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-950/40 border-blue-900/20'
+              isLight ? 'bg-slate-50 border-slate-200' : 'bg-slate-900/60 border-slate-800'
             }`}>
               <div>
                 <span className={`block text-xs font-bold ${isLight ? 'text-slate-900' : 'text-white'}`}>Active System Theme</span>
@@ -132,7 +132,7 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
                     onClick={theme === 'light' ? undefined : onToggleTheme}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-all ${
                       theme === 'light'
-                        ? 'bg-blue-600 text-white shadow-md'
+                        ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-slate-800 text-slate-400 hover:text-white'
                     }`}
                   >
@@ -143,7 +143,7 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
                     onClick={theme === 'dark' ? undefined : onToggleTheme}
                     className={`px-3.5 py-2 rounded-xl text-xs font-bold flex items-center gap-2 cursor-pointer transition-all ${
                       theme === 'dark'
-                        ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md'
+                        ? 'bg-blue-600 text-white shadow-sm'
                         : 'bg-slate-200 text-slate-700 hover:text-slate-900'
                     }`}
                   >

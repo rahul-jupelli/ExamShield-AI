@@ -68,7 +68,7 @@ export default function AlertsView({ alerts = [], role, onResolveAlert, onTrigge
         {!isReadOnly && (
           <button
             onClick={() => setShowForm(!showForm)}
-            className="px-4 py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-lg shadow-blue-500/20 active:translate-y-px transition-all cursor-pointer"
+            className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm active:translate-y-px transition-all cursor-pointer"
           >
             <Plus className="h-4 w-4" />
             <span>TRIGGER MOCK ALERT</span>

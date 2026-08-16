@@ -386,24 +386,25 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
             </h3>
             
             <div className={`relative aspect-square w-full rounded-2xl border overflow-hidden p-4 shadow-sm ${
-              isLight ? 'bg-white border-slate-300' : 'bg-[#010409] border-blue-900/20'
+              isLight ? 'bg-slate-50 border-slate-300' : 'bg-slate-950 border-slate-800'
             }`}>
-              <div className="absolute inset-0 opacity-15 bg-[linear-gradient(to_right,#0284c7_1px,transparent_1px),linear-gradient(to_bottom,#0284c7_1px,transparent_1px)] bg-[size:20px_20px]" />
+              {/* Neutral grid overlay */}
+              <div className="absolute inset-0 opacity-5 border border-slate-700 pointer-events-none" />
               
               <div className={`absolute inset-4 rounded-xl border flex flex-col justify-between p-2 pointer-events-none ${
-                isLight ? 'border-blue-400/40' : 'border-cyan-500/20'
+                isLight ? 'border-blue-400/40' : 'border-blue-500/20'
               }`}>
                 <div className="text-[9px] font-mono text-blue-600 font-extrabold uppercase">PROCTOR STATION</div>
                 <div className="text-[9px] font-mono text-blue-600 font-extrabold text-right uppercase">ENTRANCE GATE</div>
               </div>
 
-              {/* ACTIVE GLOWING BLIP FOR ROVER */}
+              {/* ACTIVE BLIP FOR ROVER */}
               <div 
                 className="absolute h-5 w-5 -ml-2.5 -mt-2.5 transition-all duration-1000 ease-out z-20"
                 style={{ left: `${rover.posX}%`, top: `${rover.posY}%` }}
               >
-                <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-50" />
-                <div className="absolute inset-0.5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center shadow-lg shadow-blue-500">
+                <div className="absolute inset-0 rounded-full bg-blue-500 animate-ping opacity-40" />
+                <div className="absolute inset-0.5 rounded-full bg-blue-600 border-2 border-white flex items-center justify-center shadow-md">
                   <span className="h-1.5 w-1.5 rounded-full bg-white" />
                 </div>
               </div>
@@ -411,10 +412,10 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
             </div>
             
             <div className={`mt-3.5 flex justify-between text-[11px] font-mono p-2.5 rounded-xl border ${
-              isLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-blue-950/20 border-blue-900/20 text-slate-400'
+              isLight ? 'bg-slate-50 border-slate-200 text-slate-800' : 'bg-slate-900/60 border-slate-800 text-slate-400'
             }`}>
               <span>POS: (X: {rover.posX}, Y: {rover.posY})</span>
-              <span className="font-bold text-blue-600 dark:text-cyan-400">FLOOR: {rover.floor}F</span>
+              <span className="font-bold text-blue-600 dark:text-blue-400">FLOOR: {rover.floor}F</span>
             </div>
           </GlassCard>
 

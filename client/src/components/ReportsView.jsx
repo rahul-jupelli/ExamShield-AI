@@ -62,8 +62,8 @@ export default function ReportsView({ students = [], role, operatorName, theme =
                 <select
                   value={selectedStudentId}
                   onChange={(e) => setSelectedStudentId(e.target.value)}
-                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none ${
-                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-[#010409] border-blue-900/30 text-white focus:border-blue-500'
+                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none transition-all ${
+                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500'
                   }`}
                 >
                   {students.map(s => (
@@ -79,8 +79,8 @@ export default function ReportsView({ students = [], role, operatorName, theme =
                 <select
                   value={violationType}
                   onChange={(e) => setViolationType(e.target.value)}
-                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none ${
-                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-[#010409] border-blue-900/30 text-white focus:border-blue-500'
+                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none transition-all ${
+                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500'
                   }`}
                 >
                   <option value="Unsanctioned RF Transmission">Unsanctioned RF Transmission</option>
@@ -96,8 +96,8 @@ export default function ReportsView({ students = [], role, operatorName, theme =
                   type="text"
                   value={roverId}
                   onChange={(e) => setRoverId(e.target.value)}
-                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none ${
-                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-[#010409] border-blue-900/30 text-white focus:border-blue-500'
+                  className={`w-full border rounded-xl p-2.5 text-xs focus:outline-none transition-all ${
+                    isLight ? 'bg-slate-50 border-slate-300 text-slate-900 focus:border-blue-500' : 'bg-slate-950 border-slate-800 text-white focus:border-blue-500'
                   }`}
                 />
               </div>

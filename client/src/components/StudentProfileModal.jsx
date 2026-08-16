@@ -57,8 +57,8 @@ export default function StudentProfileModal({
       {/* Modal content glass box */}
       <div className={`relative w-full max-w-4xl max-h-[90vh] border rounded-3xl overflow-hidden shadow-2xl flex flex-col z-10 animate-in fade-in zoom-in-95 duration-200 transition-colors ${
         isLight 
-          ? 'bg-white border-slate-200 text-slate-900 shadow-slate-300/50' 
-          : 'bg-[#020617] border-blue-900/40 text-slate-100 shadow-blue-950/80'
+          ? 'bg-white border-slate-200 text-slate-900 shadow-xl' 
+          : 'bg-[#090d16] border-slate-800 text-slate-100 shadow-2xl'
       }`}>
         
         {/* Top Header */}

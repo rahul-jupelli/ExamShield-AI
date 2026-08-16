@@ -104,18 +104,18 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
             isLight ? 'text-slate-900' : 'text-white'
           }`}>
             Live AI Patrol Terminal
-            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400 animate-pulse inline-block shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
+            <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse inline-block" />
           </h1>
           <p className={`text-xs sm:text-sm mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
             Active camera scan & RF emission surveillance system online.
           </p>
         </div>
         <div className={`text-right text-xs font-mono px-3 py-1.5 rounded-xl border ${
-          isLight ? 'bg-white border-slate-200 text-slate-600 shadow-sm' : 'bg-slate-900/60 border-blue-900/30 text-slate-400'
+          isLight ? 'bg-white border-slate-200 text-slate-600 shadow-sm' : 'bg-slate-900/80 border-slate-800 text-slate-300'
         }`}>
           <span className="font-semibold">PORT: 3000</span>
           <span className="mx-2 opacity-40">|</span>
-          <span className="font-semibold text-blue-500 dark:text-cyan-400">{rover.hall}</span>
+          <span className="font-semibold text-blue-600 dark:text-blue-400">{rover.hall}</span>
         </div>
       </div>
 
@@ -131,7 +131,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
           <div className="mt-3">
             <span className={`text-3xl font-extrabold leading-none ${isLight ? 'text-slate-900' : 'text-white'}`}>{stats.total}</span>
             <div className={`text-xs mt-1.5 flex items-center gap-1.5 font-medium ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-              <span className={`font-bold ${isLight ? 'text-blue-700' : 'text-cyan-400'}`}>{stats.verified}</span> verified cleared
+              <span className={`font-bold ${isLight ? 'text-blue-700' : 'text-blue-400'}`}>{stats.verified}</span> verified cleared
             </div>
           </div>
         </GlassCard>
@@ -142,7 +142,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
           className={`p-5 flex flex-col justify-between border transition-all ${
             isLight 
               ? 'bg-rose-50/80 border-rose-200 text-rose-900 shadow-sm hover:border-rose-300' 
-              : 'border-rose-500/30 bg-rose-950/20 shadow-[0_0_15px_rgba(244,63,94,0.05)]'
+              : 'border-rose-500/30 bg-rose-950/20'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -163,7 +163,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
           className={`p-5 flex flex-col justify-between border transition-all ${
             isLight 
               ? 'bg-amber-50/80 border-amber-200 text-amber-900 shadow-sm hover:border-amber-300' 
-              : 'border-amber-500/30 bg-amber-950/20 shadow-[0_0_15px_rgba(245,158,11,0.05)]'
+              : 'border-amber-500/30 bg-amber-950/20'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -182,15 +182,15 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
         <GlassCard theme={theme} className="p-5 flex flex-col justify-between hover:shadow-md transition-all">
           <div className="flex items-center justify-between">
             <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Patrol Rover</span>
-            <Cpu className={`h-4.5 w-4.5 ${isLight ? 'text-blue-600' : 'text-cyan-400'}`} />
+            <Cpu className={`h-4.5 w-4.5 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
           </div>
           <div className="mt-3">
             <div className="flex items-baseline gap-2">
               <span className={`text-lg font-extrabold uppercase ${isLight ? 'text-slate-900' : 'text-white'}`}>{rover.motorStatus}</span>
               <span className={`text-xs font-mono ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>({rover.battery}%)</span>
             </div>
-            <div className={`text-xs mt-1.5 font-mono flex items-center gap-1.5 font-semibold ${isLight ? 'text-blue-600' : 'text-cyan-400'}`}>
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-pulse" />
+            <div className={`text-xs mt-1.5 font-mono flex items-center gap-1.5 font-semibold ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
+              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
               {rover.currentMission}
             </div>
           </div>
@@ -202,7 +202,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
           className={`p-5 col-span-2 md:col-span-1 flex flex-col justify-between border transition-all ${
             isLight 
               ? 'bg-blue-50/80 border-blue-200 text-blue-900 shadow-sm hover:border-blue-300' 
-              : 'border-blue-500/30 bg-blue-950/20 shadow-[0_0_15px_rgba(59,130,246,0.05)]'
+              : 'border-blue-500/30 bg-blue-950/20'
           }`}
         >
           <div className="flex items-center justify-between">
@@ -229,8 +229,8 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
           placeholder="Search candidates by Name, Hall Ticket, Room, Seat, or flagged device..."
           className={`w-full border rounded-2xl py-3.5 pl-11 pr-12 text-sm focus:outline-none transition-all shadow-sm ${
             isLight
-              ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500'
-              : 'bg-slate-900/40 border-blue-900/30 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-1 focus:ring-blue-500/20'
+              ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+              : 'bg-[#141622] border-slate-800 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
           }`}
         />
         {searchQuery && (

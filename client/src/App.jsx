@@ -9,6 +9,7 @@ import {
 import { supabase } from "./lib/supabase";
 
 // Importing Custom Subviews
+import LandingView from './components/LandingView';
 import LoginView from './components/LoginView';
 import Sidebar from './components/Sidebar';
 import DashboardView from './components/DashboardView';
@@ -25,6 +26,9 @@ export default function App() {
   // 1. Session state (auth)
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+
+  // View Mode state: 'landing' | 'dashboard'
+  const [viewMode, setViewMode] = useState('landing');
 
   // Theme State: 'dark' | 'light'
   const [theme, setTheme] = useState(() => localStorage.getItem('examshield_theme') || 'dark');
@@ -403,26 +407,30 @@ export default function App() {
     await supabase.auth.signOut();
     setSession(null);
     setActiveTab("dashboard");
+    setViewMode("landing");
   };
 
   // 10. Session Restoration Loading Gate
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-[#020617] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
-        <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4 shadow-[0_0_15px_rgba(59,130,246,0.5)]" />
-        <span className="text-sm font-bold tracking-wider text-cyan-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
+      <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
+        <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <span className="text-sm font-bold tracking-wider text-blue-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
         <span className="text-xs text-slate-500 mt-2">ExamShield AI Autonomous Surveillance Suite</span>
       </div>
     );
   }
 
-  // If session is empty, render Secure Gate login portal
-  if (!session) {
+  // Render Minimal Premium Landing Page
+  if (viewMode === 'landing' || (!session && viewMode !== 'dashboard')) {
     return (
-      <LoginView
-        onLoginSuccess={(user) => setSession(formatUserData(user))}
-        theme={theme}
-        onToggleTheme={toggleTheme}
+      <LandingView
+        session={session}
+        onEnterDashboard={() => setViewMode('dashboard')}
+        onLoginSuccess={(user) => {
+          setSession(formatUserData(user));
+          setViewMode('dashboard');
+        }}
       />
     );
   }
@@ -500,12 +508,12 @@ export default function App() {
 
   return (
     <div className={`min-h-screen flex font-sans overflow-x-hidden transition-colors duration-200 ${
-      theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#010409] text-slate-200'
+      theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#090d16] text-slate-200'
     }`}>
 
       {/* Dynamic Toast alert notifications banner */}
       {toastNotification && (
-        <div className="fixed top-20 right-4 z-50 max-w-sm rounded-2xl bg-rose-950/95 border border-rose-500/40 p-4 shadow-2xl flex gap-3.5 items-start animate-in slide-in-from-right duration-300 shadow-[0_0_15px_rgba(239,68,68,0.15)]">
+        <div className="fixed top-20 right-4 z-50 max-w-sm rounded-2xl bg-rose-950 border border-rose-500/40 p-4 shadow-xl flex gap-3.5 items-start animate-in slide-in-from-right duration-300">
           <ShieldAlert className="h-5 w-5 text-rose-400 flex-shrink-0 mt-0.5 animate-bounce" />
           <div className="flex-1 min-w-0">
             <h4 className="text-xs font-bold text-white uppercase tracking-wide">AI TELEMETRY FLAG INCIDENT</h4>
@@ -532,6 +540,7 @@ export default function App() {
         setMobileOpen={setMobileSidebarOpen}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onGoToLanding={() => setViewMode('landing')}
       />
 
       {/* Main Content scroll window with comfortable distance from sidebar */}
@@ -540,7 +549,7 @@ export default function App() {
 
           {/* Telemetry Warning banner */}
           {showOfflineBanner && (
-            <div className="px-4 py-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3 font-mono print:hidden shadow-[0_0_10px_rgba(245,158,11,0.05)]">
+            <div className="px-4 py-2.5 rounded-xl bg-amber-950/20 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3 font-mono print:hidden">
               <span className="flex items-center gap-2">
                 <WifiOff className="h-4.5 w-4.5 animate-pulse" />
                 TELEMETRY LINK INTERRUPTED. COMMENCING HYBRID REST-POLLING ROUTINE.
@@ -562,7 +571,9 @@ export default function App() {
         </div>
 
         {/* Footer */}
-        <footer className="mt-12 pt-6 border-t border-blue-900/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-[10px] font-mono text-slate-500 print:hidden">
+        <footer className={`mt-12 pt-6 border-t flex flex-col sm:flex-row items-center justify-between gap-3 text-[10px] font-mono text-slate-500 print:hidden ${
+          theme === 'light' ? 'border-slate-200' : 'border-slate-800'
+        }`}>
           <span>DESIGNATION: AI SURVEILLANCE SUITE · UNIVERSITY PROJECT v2.84</span>
           <span>© 2026 EXAMSHIELD AGENT. ALL TELEMETRY CHASSIS ACTIVE.</span>
         </footer>
