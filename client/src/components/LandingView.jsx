@@ -39,12 +39,8 @@ export default function LandingView({ session, onEnterDashboard, onLoginSuccess 
   };
 
   const openAuth = (mode = 'signin') => {
-    if (session) {
-      onEnterDashboard();
-    } else {
-      setAuthMode(mode);
-      setAuthModalOpen(true);
-    }
+    setAuthMode(mode);
+    setAuthModalOpen(true);
   };
 
   // Interactive Rover Radar Canvas in Hero
@@ -187,33 +183,21 @@ export default function LandingView({ session, onEnterDashboard, onLoginSuccess 
             <a href="#rover" className="hover:text-white transition-colors">Rover</a>
           </nav>
 
-          {/* Right Action */}
+          {/* Right Action: Login / Sign Up Button */}
           <div className="flex items-center gap-3">
-            {session ? (
-              <button
-                onClick={onEnterDashboard}
-                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_4px_16px_rgba(37,99,235,0.4)]"
-              >
-                <span>Command Center</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </button>
-            ) : (
-              <>
-                <button
-                  onClick={() => openAuth('signin')}
-                  className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 transition-colors cursor-pointer"
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => openAuth('signup')}
-                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_4px_16px_rgba(37,99,235,0.4)]"
-                >
-                  <span>Get Started</span>
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => openAuth('signin')}
+              className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 transition-colors cursor-pointer"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => openAuth('signup')}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_4px_16px_rgba(37,99,235,0.4)] active:scale-95"
+            >
+              <span>Login / Sign Up</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
           </div>
 
         </div>
@@ -524,16 +508,6 @@ export default function LandingView({ session, onEnterDashboard, onLoginSuccess 
               </div>
 
             </div>
-          </div>
-
-          <div className="pt-4">
-            <button
-              onClick={() => session ? onEnterDashboard() : openAuth('signin')}
-              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-6 py-3.5 rounded-xl shadow-lg shadow-blue-600/20 transition-all inline-flex items-center gap-2 cursor-pointer"
-            >
-              <span>Open Command Center</span>
-              <ArrowRight className="h-4 w-4" />
-            </button>
           </div>
 
         </div>
