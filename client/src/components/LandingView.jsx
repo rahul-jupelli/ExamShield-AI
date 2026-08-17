@@ -263,13 +263,6 @@ export default function LandingView({ session, onEnterDashboard, onLoginSuccess 
                 <span>Explore Platform</span>
                 <ArrowRight className="h-4 w-4" />
               </a>
-
-              <button
-                onClick={() => session ? onEnterDashboard() : openAuth('signin')}
-                className="bg-white text-slate-900 hover:bg-slate-100 font-semibold text-sm px-7 py-3.5 rounded-full shadow-xl transition-all flex items-center gap-2 cursor-pointer active:scale-95"
-              >
-                <span>Enter Command Center</span>
-              </button>
             </div>
           </div>
 

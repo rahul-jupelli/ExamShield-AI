@@ -508,7 +508,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen flex font-sans overflow-x-hidden transition-colors duration-200 ${
-      theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#090d16] text-slate-200'
+      theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#070a13] text-slate-100'
     }`}>
 
       {/* Dynamic Toast alert notifications banner */}

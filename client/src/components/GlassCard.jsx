@@ -15,7 +15,7 @@ export default function GlassCard({
     variant === 'blue' ? 'border-blue-500/40 bg-[#141724] shadow-[0_8px_30px_rgba(37,99,235,0.15)]' :
     variant === 'green' ? 'border-emerald-500/40 bg-[#141a24] shadow-[0_8px_30px_rgba(16,185,129,0.15)]' :
     variant === 'red' ? 'border-rose-500/40 bg-[#1e1520] shadow-[0_8px_30px_rgba(244,63,94,0.15)]' :
-    'border-slate-800/80 bg-[#121520] shadow-[0_12px_32px_rgba(0,0,0,0.5)]';
+    'border-slate-800/80 bg-[#0d121f] shadow-[0_12px_32px_rgba(0,0,0,0.5)]';
 
   return (
     <div

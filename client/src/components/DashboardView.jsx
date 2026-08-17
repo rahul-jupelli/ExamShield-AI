@@ -13,12 +13,16 @@ import {
   ChevronRight, 
   Sparkles,
   Wifi,
-  Smartphone
+  Smartphone,
+  TrendingUp,
+  Activity,
+  User
 } from 'lucide-react';
 import GlassCard from './GlassCard';
 
 export default function DashboardView({ students = [], rover = {}, alerts = [], onSelectStudent, theme = 'dark' }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState('all'); // 'all' | 'devices' | 'suspicious' | 'verified'
   const isLight = theme === 'light';
 
   // Strict deduplication of students by hallTicket / name / id to keep original entries only
@@ -62,18 +66,26 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
     };
   }, [uniqueStudents, uniqueAlerts]);
 
-  // 2. Filter deduplicated students based on search input
+  // 2. Filter deduplicated students based on search input & category tab
   const filteredStudents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return uniqueStudents;
-    return uniqueStudents.filter(s => 
-      s.name.toLowerCase().includes(q) || 
-      s.hallTicket.toLowerCase().includes(q) || 
-      s.seat.toLowerCase().includes(q) ||
-      (s.detectedDevice && s.detectedDevice.toLowerCase().includes(q)) ||
-      (s.suspicionReason && s.suspicionReason.toLowerCase().includes(q))
-    );
-  }, [uniqueStudents, searchQuery]);
+    return uniqueStudents.filter(s => {
+      // Category filter
+      if (activeCategory === 'devices' && s.status !== 'Device Detected') return false;
+      if (activeCategory === 'suspicious' && s.status !== 'Suspicious') return false;
+      if (activeCategory === 'verified' && s.status !== 'Verified Safe') return false;
+
+      // Text query filter
+      if (!q) return true;
+      return (
+        s.name.toLowerCase().includes(q) || 
+        s.hallTicket.toLowerCase().includes(q) || 
+        s.seat.toLowerCase().includes(q) ||
+        (s.detectedDevice && s.detectedDevice.toLowerCase().includes(q)) ||
+        (s.suspicionReason && s.suspicionReason.toLowerCase().includes(q))
+      );
+    });
+  }, [uniqueStudents, searchQuery, activeCategory]);
 
   // 3. Separate into 3 priority groups
   const { group1, group2, group3 } = useMemo(() => {
@@ -94,129 +106,210 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
     return { group1: g1, group2: g2, group3: g3 };
   }, [filteredStudents]);
 
+  const CATEGORY_TABS = [
+    { id: 'all', label: 'All Candidates', count: stats.total },
+    { id: 'devices', label: 'Device Intercepts', count: stats.devices },
+    { id: 'suspicious', label: 'Suspicious Pose', count: stats.suspicious },
+    { id: 'verified', label: 'Verified Safe', count: stats.verified },
+  ];
+
   return (
     <div className="space-y-7 sm:space-y-8 pb-8">
       
-      {/* 1. Header Banner */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className={`text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-2.5 font-sans ${
-            isLight ? 'text-slate-900' : 'text-white'
-          }`}>
-            Live AI Patrol Terminal
-            <span className="h-2.5 w-2.5 rounded-full bg-blue-500 animate-pulse inline-block" />
-          </h1>
-          <p className={`text-xs sm:text-sm mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-            Active camera scan & RF emission surveillance system online.
-          </p>
+      {/* 1. HERO GRADIENT BANNER WITH FLOATING STAT CARDS (Matching Reference Theme) */}
+      <div className={`relative rounded-[28px] overflow-hidden p-6 sm:p-8 transition-all shadow-2xl border ${
+        isLight 
+          ? 'bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-600 border-blue-400/30 text-white' 
+          : 'bg-gradient-to-br from-[#1d4ed8] via-[#1e40af] to-[#312e81] border-blue-400/20 text-white'
+      }`}>
+
+        {/* Ambient background glow shapes */}
+        <div className="pointer-events-none absolute -right-16 -top-16 w-80 h-80 rounded-full bg-cyan-400/10 blur-3xl" />
+        <div className="pointer-events-none absolute left-1/3 -bottom-20 w-96 h-96 rounded-full bg-purple-500/10 blur-3xl" />
+
+        {/* Hero Content Header */}
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[11px] font-mono tracking-wide uppercase text-blue-100">
+              <span className="h-2 w-2 rounded-full bg-cyan-300 animate-pulse" />
+              <span>ExamShield AI Patrol Suite</span>
+            </div>
+            <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-white leading-tight font-sans">
+              AI Command Center
+            </h1>
+            <p className="text-xs sm:text-sm text-blue-100/80 max-w-xl">
+              Real-time candidate telemetry, camera patrols, and RF spectrum tracking.
+            </p>
+          </div>
+
+          {/* User Account / Location Pill */}
+          <div className="flex items-center gap-3 bg-slate-950/40 backdrop-blur-md border border-white/15 px-4 py-2.5 rounded-2xl shadow-lg">
+            <div className="h-9 w-9 rounded-full bg-gradient-to-r from-blue-400 to-cyan-400 flex items-center justify-center font-bold text-slate-950 text-sm shadow-md">
+              <User className="h-5 w-5 text-slate-950" />
+            </div>
+            <div>
+              <span className="block text-xs font-bold text-white leading-tight">Admin Operator</span>
+              <span className="block text-[10px] font-mono text-blue-200 mt-0.5">
+                PORT: 3000 · <span className="text-cyan-300 font-semibold">{rover.hall || 'LH-302'}</span>
+              </span>
+            </div>
+          </div>
         </div>
-        <div className={`text-right text-xs font-mono px-3 py-1.5 rounded-xl border ${
-          isLight ? 'bg-white border-slate-200 text-slate-600 shadow-sm' : 'bg-slate-900/80 border-slate-800 text-slate-300'
-        }`}>
-          <span className="font-semibold">PORT: 3000</span>
-          <span className="mx-2 opacity-40">|</span>
-          <span className="font-semibold text-blue-600 dark:text-blue-400">{rover.hall}</span>
+
+        {/* 3 FLOATING BENTO METRIC CARDS (Embedded inside Hero Banner) */}
+        <div className="relative z-10 grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-5 pt-2">
+          
+          {/* Card 1: Total Candidates (Lime Sparkline) */}
+          <div className={`rounded-2xl p-5 border backdrop-blur-xl transition-all shadow-xl flex flex-col justify-between ${
+            isLight ? 'bg-white/95 text-slate-900 border-white/40' : 'bg-[#090d16]/90 text-white border-white/15'
+          }`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <span className={`block text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Total Candidates
+                </span>
+                <span className={`text-3xl font-extrabold mt-1 block tracking-tight ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                  {stats.total}
+                </span>
+              </div>
+              <div className="h-9 w-9 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                <Users className="h-5 w-5 text-emerald-400" />
+              </div>
+            </div>
+
+            {/* Sparkline Graphic (Lime Green Wave) */}
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div className="text-[11px] font-mono font-medium text-emerald-400 flex items-center gap-1">
+                <TrendingUp className="h-3.5 w-3.5" />
+                <span>+100% active in hall</span>
+              </div>
+              <svg className="w-24 h-9 overflow-visible" viewBox="0 0 100 35">
+                <path
+                  d="M 0,25 Q 25,5 50,20 T 100,8"
+                  fill="none"
+                  stroke="#a3e635"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+
+          {/* Card 2: Device Intercepts (Cyan Sparkline) */}
+          <div className={`rounded-2xl p-5 border backdrop-blur-xl transition-all shadow-xl flex flex-col justify-between ${
+            isLight ? 'bg-white/95 text-slate-900 border-white/40' : 'bg-[#090d16]/90 text-white border-white/15'
+          }`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <span className={`block text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Device Intercepts
+                </span>
+                <span className="text-3xl font-extrabold mt-1 block tracking-tight text-rose-500 dark:text-rose-400">
+                  {stats.devices}
+                </span>
+              </div>
+              <div className="h-9 w-9 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
+                <Smartphone className="h-5 w-5 text-rose-400 animate-bounce" />
+              </div>
+            </div>
+
+            {/* Sparkline Graphic (Cyan Wave) */}
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div className="text-[11px] font-mono font-medium text-rose-400 flex items-center gap-1">
+                <ShieldAlert className="h-3.5 w-3.5" />
+                <span>{stats.activeAlertCount} flags requiring action</span>
+              </div>
+              <svg className="w-24 h-9 overflow-visible" viewBox="0 0 100 35">
+                <path
+                  d="M 0,20 Q 30,30 60,10 T 100,18"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+
+          {/* Card 3: Verified Safe Students (Purple Sparkline) */}
+          <div className={`rounded-2xl p-5 border backdrop-blur-xl transition-all shadow-xl flex flex-col justify-between ${
+            isLight ? 'bg-white/95 text-slate-900 border-white/40' : 'bg-[#090d16]/90 text-white border-white/15'
+          }`}>
+            <div className="flex items-start justify-between">
+              <div>
+                <span className={`block text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+                  Verified Safe
+                </span>
+                <span className="text-3xl font-extrabold mt-1 block tracking-tight text-emerald-500 dark:text-emerald-400">
+                  {stats.verified}
+                </span>
+              </div>
+              <div className="h-9 w-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400">
+                <CheckCircle className="h-5 w-5 text-purple-400" />
+              </div>
+            </div>
+
+            {/* Sparkline Graphic (Purple Wave) */}
+            <div className="mt-4 flex items-end justify-between gap-3">
+              <div className="text-[11px] font-mono font-medium text-purple-400 flex items-center gap-1">
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>99.4% AI Match Confidence</span>
+              </div>
+              <svg className="w-24 h-9 overflow-visible" viewBox="0 0 100 35">
+                <path
+                  d="M 0,28 Q 20,10 50,22 T 100,5"
+                  fill="none"
+                  stroke="#c084fc"
+                  strokeWidth="3.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      {/* 2. Top Bento-Stats Row with Perfect Gaps */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 sm:gap-5">
-        
-        {/* Stat 1: Total & Verified */}
-        <GlassCard theme={theme} className="p-5 flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>All Students</span>
-            <Users className={`h-4.5 w-4.5 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
-          </div>
-          <div className="mt-3">
-            <span className={`text-3xl font-extrabold leading-none ${isLight ? 'text-slate-900' : 'text-white'}`}>{stats.total}</span>
-            <div className={`text-xs mt-1.5 flex items-center gap-1.5 font-medium ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-              <span className={`font-bold ${isLight ? 'text-blue-700' : 'text-blue-400'}`}>{stats.verified}</span> verified cleared
-            </div>
-          </div>
-        </GlassCard>
+      {/* 2. PILL NAVIGATION FILTER TABS (Matching Reference Pill Row) */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-2">
+        <div className={`inline-flex items-center p-1.5 rounded-2xl border transition-all ${
+          isLight ? 'bg-slate-200/70 border-slate-300' : 'bg-[#0d121f] border-slate-800'
+        }`}>
+          {CATEGORY_TABS.map((tab) => {
+            const isActive = activeCategory === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => setActiveCategory(tab.id)}
+                className={`
+                  px-4 py-2 rounded-xl text-xs font-semibold font-sans cursor-pointer transition-all duration-200 flex items-center gap-2
+                  ${isActive
+                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/25 font-bold'
+                    : isLight
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-white/60'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'}
+                `}
+              >
+                <span>{tab.label}</span>
+                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full font-bold ${
+                  isActive 
+                    ? 'bg-white/20 text-white' 
+                    : isLight ? 'bg-slate-300 text-slate-700' : 'bg-slate-800 text-slate-400'
+                }`}>
+                  {tab.count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
 
-        {/* Stat 2: Active Infractions (Red) */}
-        <GlassCard 
-          theme={theme} 
-          className={`p-5 flex flex-col justify-between border transition-all ${
-            isLight 
-              ? 'bg-rose-50/80 border-rose-200 text-rose-900 shadow-sm hover:border-rose-300' 
-              : 'border-rose-500/30 bg-rose-950/20'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-rose-700' : 'text-rose-400'}`}>Active Devices</span>
-            <Smartphone className="h-4.5 w-4.5 text-rose-500 animate-bounce" />
-          </div>
-          <div className="mt-3">
-            <span className="text-3xl font-extrabold text-rose-500 leading-none">{stats.devices}</span>
-            <div className={`text-xs mt-1.5 font-medium ${isLight ? 'text-rose-700' : 'text-rose-300'}`}>
-              Critical security threat
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Stat 3: Suspicion Flags (Orange) */}
-        <GlassCard 
-          theme={theme} 
-          className={`p-5 flex flex-col justify-between border transition-all ${
-            isLight 
-              ? 'bg-amber-50/80 border-amber-200 text-amber-900 shadow-sm hover:border-amber-300' 
-              : 'border-amber-500/30 bg-amber-950/20'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-amber-700' : 'text-amber-400'}`}>Suspicious Pose</span>
-            <ShieldAlert className="h-4.5 w-4.5 text-amber-500" />
-          </div>
-          <div className="mt-3">
-            <span className="text-3xl font-extrabold text-amber-500 leading-none">{stats.suspicious}</span>
-            <div className={`text-xs mt-1.5 font-medium ${isLight ? 'text-amber-800' : 'text-amber-300'}`}>
-              Verification pending
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Stat 4: Rover Status */}
-        <GlassCard theme={theme} className="p-5 flex flex-col justify-between hover:shadow-md transition-all">
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Patrol Rover</span>
-            <Cpu className={`h-4.5 w-4.5 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
-          </div>
-          <div className="mt-3">
-            <div className="flex items-baseline gap-2">
-              <span className={`text-lg font-extrabold uppercase ${isLight ? 'text-slate-900' : 'text-white'}`}>{rover.motorStatus}</span>
-              <span className={`text-xs font-mono ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>({rover.battery}%)</span>
-            </div>
-            <div className={`text-xs mt-1.5 font-mono flex items-center gap-1.5 font-semibold ${isLight ? 'text-blue-600' : 'text-blue-400'}`}>
-              <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
-              {rover.currentMission}
-            </div>
-          </div>
-        </GlassCard>
-
-        {/* Stat 5: Active Alerts log */}
-        <GlassCard 
-          theme={theme} 
-          className={`p-5 col-span-2 md:col-span-1 flex flex-col justify-between border transition-all ${
-            isLight 
-              ? 'bg-blue-50/80 border-blue-200 text-blue-900 shadow-sm hover:border-blue-300' 
-              : 'border-blue-500/30 bg-blue-950/20'
-          }`}
-        >
-          <div className="flex items-center justify-between">
-            <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-blue-800' : 'text-blue-400'}`}>Threat Stream</span>
-            <AlertOctagon className={`h-4.5 w-4.5 ${isLight ? 'text-blue-600' : 'text-blue-400'}`} />
-          </div>
-          <div className="mt-3">
-            <span className={`text-3xl font-extrabold leading-none ${isLight ? 'text-blue-700' : 'text-blue-400'}`}>{stats.activeAlertCount}</span>
-            <div className={`text-xs mt-1.5 font-medium ${isLight ? 'text-blue-800' : 'text-blue-300'}`}>
-              Unresolved flags in log
-            </div>
-          </div>
-        </GlassCard>
-
+        {/* Rover Quick Telemetry Metric */}
+        <div className={`hidden sm:flex items-center gap-2.5 px-3.5 py-2 rounded-xl border text-xs font-mono ${
+          isLight ? 'bg-white border-slate-200 text-slate-700 shadow-sm' : 'bg-[#0d121f] border-slate-800 text-slate-300'
+        }`}>
+          <Cpu className="h-4 w-4 text-blue-500 animate-pulse" />
+          <span>ROVER: <span className="font-bold text-emerald-400 uppercase">{rover.motorStatus}</span> ({rover.battery}%)</span>
+        </div>
       </div>
 
       {/* 3. Search Bar */}
@@ -230,7 +323,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
           className={`w-full border rounded-2xl py-3.5 pl-11 pr-12 text-sm focus:outline-none transition-all shadow-sm ${
             isLight
               ? 'bg-white border-slate-300 text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
-              : 'bg-[#141622] border-slate-800 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
+              : 'bg-[#0d121f] border-slate-800 text-white placeholder:text-slate-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20'
           }`}
         />
         {searchQuery && (
@@ -245,7 +338,55 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
         )}
       </div>
 
-      {/* 4. Priority Sorted Student Groups */}
+      {/* 4. TELEMETRY WAVE OVERVIEW SECTION (Matching Commission Overview curve in reference UI) */}
+      <div className={`rounded-2xl border p-5 transition-all shadow-md ${
+        isLight ? 'bg-white border-slate-200' : 'bg-[#0d121f] border-slate-800'
+      }`}>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <div>
+            <h3 className={`text-sm font-extrabold flex items-center gap-2 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              <Activity className="h-4 w-4 text-blue-500" />
+              Telemetry Overview & Live Patrol Status
+            </h3>
+            <p className={`text-xs mt-0.5 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>
+              Real-time RF emission density & AI vision scanning stream history.
+            </p>
+          </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs font-mono font-bold text-blue-400">
+            <span>Scan Rate: 1,420 events / min</span>
+          </div>
+        </div>
+
+        {/* Interactive Wave Graph Graphic */}
+        <div className="relative h-20 w-full overflow-hidden flex items-end">
+          <svg className="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 500 80">
+            <defs>
+              <linearGradient id="waveGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.3" />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M 0,60 Q 75,20 150,45 T 300,30 T 450,50 L 500,25 L 500,80 L 0,80 Z"
+              fill="url(#waveGradient)"
+            />
+            <path
+              d="M 0,60 Q 75,20 150,45 T 300,30 T 450,50 L 500,25"
+              fill="none"
+              stroke="#3b82f6"
+              strokeWidth="2.5"
+            />
+          </svg>
+
+          {/* Hover / Highlight Tooltip Pill matching reference design */}
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 bg-slate-950 border border-blue-500/40 px-3 py-1 rounded-xl shadow-lg text-[10px] font-mono text-cyan-300 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400 animate-ping" />
+            <span>Live Stream Active: <span className="font-bold text-white">99.4% Sync</span></span>
+          </div>
+        </div>
+      </div>
+
+      {/* 5. Priority Sorted Student Groups */}
       <div className="space-y-8">
         
         {/* GROUP 1: Electronic Device Detected (RED) */}
@@ -266,7 +407,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                   className={`group relative rounded-2xl border p-5 flex gap-4 transition-all duration-300 cursor-pointer hover:-translate-y-0.5 ${
                     isLight
                       ? 'bg-rose-50/90 border-rose-300 text-slate-900 shadow-sm hover:border-rose-400 hover:bg-rose-100/90'
-                      : 'bg-rose-950/20 border-rose-500/40 text-slate-100 hover:bg-rose-950/30 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
+                      : 'bg-[#0d121f] border-rose-500/40 text-slate-100 hover:bg-rose-950/20 shadow-[0_0_15px_rgba(244,63,94,0.08)]'
                   }`}
                 >
                   <div className={`relative w-20 h-24 rounded-xl overflow-hidden border flex-shrink-0 ${
@@ -343,7 +484,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                   className={`group relative rounded-2xl border p-5 flex gap-4 transition-all duration-300 cursor-pointer hover:-translate-y-0.5 ${
                     isLight
                       ? 'bg-amber-50/90 border-amber-300 text-slate-900 shadow-sm hover:border-amber-400 hover:bg-amber-100/90'
-                      : 'bg-amber-950/20 border-amber-500/30 text-slate-100 hover:bg-amber-950/30 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
+                      : 'bg-[#0d121f] border-amber-500/30 text-slate-100 hover:bg-amber-950/20 shadow-[0_0_15px_rgba(245,158,11,0.08)]'
                   }`}
                 >
                   <div className={`relative w-20 h-24 rounded-xl overflow-hidden border flex-shrink-0 ${
@@ -409,7 +550,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                   className={`group rounded-2xl border p-4 flex gap-3.5 transition-all duration-300 cursor-pointer shadow-sm ${
                     isLight
                       ? 'bg-white border-slate-200 hover:border-emerald-400 hover:bg-emerald-50/50 hover:shadow-md'
-                      : 'bg-slate-900/40 border-blue-900/20 hover:border-emerald-500/40 hover:bg-slate-900/60'
+                      : 'bg-[#0d121f] border-slate-800 hover:border-emerald-500/40 hover:bg-[#111728]'
                   }`}
                 >
                   <img 
@@ -442,11 +583,11 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
 
         {filteredStudents.length === 0 && (
           <div className={`p-12 text-center rounded-2xl border border-dashed ${
-            isLight ? 'bg-white border-slate-300' : 'bg-slate-950/20 border-white/10'
+            isLight ? 'bg-white border-slate-300' : 'bg-[#0d121f] border-white/10'
           }`}>
             <Search className="h-8 w-8 text-slate-400 mx-auto mb-2" />
             <h4 className={`text-sm font-semibold ${isLight ? 'text-slate-800' : 'text-slate-300'}`}>No Student Records Found</h4>
-            <p className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Try modifying your query or filter term.</p>
+            <p className={`text-xs mt-1 ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Try modifying your query or selecting another tab filter.</p>
           </div>
         )}
 

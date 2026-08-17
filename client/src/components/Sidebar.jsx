@@ -55,7 +55,7 @@ export default function Sidebar({
     <div className={`h-full flex flex-col justify-between border-r p-4 transition-colors duration-200 ${
       isLight 
         ? 'bg-white border-slate-200 text-slate-800' 
-        : 'bg-[#0e1017] border-slate-800/80 text-slate-300'
+        : 'bg-[#0a0e19] border-slate-800/80 text-slate-300'
     }`}>
       <div className="flex-1 overflow-y-auto min-h-0 pr-0.5 space-y-4">
         {/* Brand Header */}
@@ -137,7 +137,7 @@ export default function Sidebar({
                   ${isActive 
                     ? isLight
                       ? 'bg-blue-600 text-white font-semibold shadow-sm'
-                      : 'bg-blue-600 text-white font-bold shadow-[0_4px_18px_rgba(37,99,235,0.4)]' 
+                      : 'bg-blue-600 text-white font-bold shadow-sm' 
                     : isLight
                       ? 'hover:bg-slate-100 border border-transparent text-slate-600 hover:text-slate-900'
                       : 'hover:bg-[#161926] border border-transparent text-slate-400 hover:text-slate-200'}

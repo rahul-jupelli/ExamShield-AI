@@ -183,13 +183,6 @@ export default function AlertsView({ alerts = [], role, onResolveAlert, onTrigge
                   (isLight ? 'border-slate-200 bg-white hover:border-blue-300' : 'border-white/10 bg-slate-900/30 hover:border-blue-500/30')}
               `}
             >
-              {/* Vertical Color Stripe Accent */}
-              <div className={`absolute top-0 bottom-0 left-0 w-1 ${
-                isResolved ? 'bg-slate-400 dark:bg-slate-700' :
-                isCritical ? 'bg-rose-500' :
-                isHigh ? 'bg-amber-500' : 'bg-blue-500'
-              }`} />
-
               {/* Snapshot image if alert has one */}
               {alert.snapshot && !isResolved && (
                 <div className={`w-full md:w-32 h-24 rounded-xl overflow-hidden border flex-shrink-0 ${
