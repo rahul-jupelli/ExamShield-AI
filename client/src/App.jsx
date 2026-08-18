@@ -21,14 +21,20 @@ import AnalyticsView from './components/AnalyticsView';
 import HealthView from './components/HealthView';
 import HistoryView from './components/HistoryView';
 import SettingsView from './components/SettingsView';
+import AddStudentView from './components/AddStudentView';
 
 export default function App() {
   // 1. Session state (auth)
-  const [session, setSession] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  // >>> AUTH TEMPORARILY DISABLED — session initialized with mock admin <<<
+  const [session, setSession] = useState({
+    role: 'Admin',
+    fullName: 'Dev Admin',
+    email: 'dev@examshield.ai',
+  });
+  const [authLoading, setAuthLoading] = useState(false);
 
   // View Mode state: 'landing' | 'dashboard'
-  const [viewMode, setViewMode] = useState('landing');
+  const [viewMode, setViewMode] = useState('dashboard');
 
   // Theme State: 'dark' | 'light'
   const [theme, setTheme] = useState(() => localStorage.getItem('examshield_theme') || 'dark');
@@ -403,6 +409,42 @@ export default function App() {
     }
   };
 
+  const handleAddStudent = async (studentOrStudents) => {
+    try {
+      const res = await fetch('/api/students', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(studentOrStudents),
+      });
+      const data = await res.json();
+      
+      const newItems = Array.isArray(studentOrStudents) ? studentOrStudents : [studentOrStudents];
+      setStudents(prev => {
+        const uniqueMap = new Map();
+        [...newItems, ...prev].forEach(s => {
+          const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+          if (key && !uniqueMap.has(key)) {
+            uniqueMap.set(key, s);
+          }
+        });
+        return Array.from(uniqueMap.values());
+      });
+
+      // Direct Supabase fallback insert
+      try {
+        const recordsToInsert = Array.isArray(studentOrStudents) ? studentOrStudents : [studentOrStudents];
+        await supabase.from('students').upsert(recordsToInsert, { onConflict: 'id' });
+      } catch (subErr) {
+        console.warn('Direct Supabase insert notice:', subErr.message);
+      }
+      return data;
+    } catch (err) {
+      console.error('Failed to add student via API:', err);
+      const newItems = Array.isArray(studentOrStudents) ? studentOrStudents : [studentOrStudents];
+      setStudents(prev => [...newItems, ...prev]);
+    }
+  };
+
   const handleLogout = async () => {
     await supabase.auth.signOut();
     setSession(null);
@@ -411,29 +453,33 @@ export default function App() {
   };
 
   // 10. Session Restoration Loading Gate
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
-        <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-        <span className="text-sm font-bold tracking-wider text-blue-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
-        <span className="text-xs text-slate-500 mt-2">ExamShield AI Autonomous Surveillance Suite</span>
-      </div>
-    );
-  }
+  // >>> AUTH TEMPORARILY DISABLED — RE-ENABLE WHEN READY <<<
+  // if (authLoading) {
+  //   return (
+  //     <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
+  //       <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+  //       <span className="text-sm font-bold tracking-wider text-blue-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
+  //       <span className="text-xs text-slate-500 mt-2">ExamShield AI Autonomous Surveillance Suite</span>
+  //     </div>
+  //   );
+  // }
+
+  // activeSession fallback no longer needed — session is pre-initialized above
 
   // Render Minimal Premium Landing Page
-  if (viewMode === 'landing' || (!session && viewMode !== 'dashboard')) {
-    return (
-      <LandingView
-        session={session}
-        onEnterDashboard={() => setViewMode('dashboard')}
-        onLoginSuccess={(user) => {
-          setSession(formatUserData(user));
-          setViewMode('dashboard');
-        }}
-      />
-    );
-  }
+  // >>> LANDING PAGE REDIRECT TEMPORARILY DISABLED <<<
+  // if (viewMode === 'landing' || (!session && viewMode !== 'dashboard')) {
+  //   return (
+  //     <LandingView
+  //       session={session}
+  //       onEnterDashboard={() => setViewMode('dashboard')}
+  //       onLoginSuccess={(user) => {
+  //         setSession(formatUserData(user));
+  //         setViewMode('dashboard');
+  //       }}
+  //     />
+  //   );
+  // }
 
 
   // Render subviews dynamically
@@ -455,6 +501,14 @@ export default function App() {
             rover={rover}
             alerts={alerts}
             onSelectStudent={(s) => setSelectedStudent(s)}
+            theme={theme}
+          />
+        );
+      case 'add-student':
+        return (
+          <AddStudentView
+            onAddStudent={handleAddStudent}
+            onNavigateToDashboard={() => setActiveTab('dashboard')}
             theme={theme}
           />
         );

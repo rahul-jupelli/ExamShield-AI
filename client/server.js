@@ -27,7 +27,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 // Database Deduplication Utility Function
 // ==========================================
 async function cleanDuplicateDatabaseRecords() {
-  console.log('[DEDUPLICATION] Running database cleanup for public tables...');
+  console.log('Running database cleanup for public tables...');
   try {
     // 1. Clean Duplicate Students in Supabase
     const { data: allStudents, error: fetchStudentsErr } = await supabase.from('students').select('*').order('id');
@@ -166,6 +166,48 @@ app.get('/api/students', async (req, res) => {
 
     res.json(Array.from(uniqueMap.values()));
   } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Add New Student(s) to Supabase
+app.post('/api/students', async (req, res) => {
+  try {
+    const studentData = req.body;
+    let studentsToInsert = Array.isArray(studentData) ? studentData : [studentData];
+    
+    // Process default fields for each student
+    const records = studentsToInsert.map(s => ({
+      id: s.id || ('STU-' + Math.floor(1000 + Math.random() * 9000)),
+      name: s.name || 'Unknown Cadet',
+      hallTicket: s.hallTicket || ('HT-' + Math.floor(10000 + Math.random() * 90000)),
+      branch: s.branch || 'Computer Science & AI',
+      room: s.room || 'LH-302',
+      seat: s.seat || 'Seat 01',
+      photo: s.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+      status: s.status || 'Verified Safe',
+      detectedDevice: s.detectedDevice || null,
+      detectionConfidence: s.detectionConfidence || null,
+      suspicionScore: s.suspicionScore !== undefined ? s.suspicionScore : 0,
+      suspicionReason: s.suspicionReason || null,
+      timestamp: s.timestamp || new Date().toISOString(),
+      faceConfidence: s.faceConfidence || 98.5,
+      entryDecision: s.entryDecision || 'Allowed',
+      verificationCompleted: s.verificationCompleted !== undefined ? s.verificationCompleted : true,
+      entryAllowed: s.entryAllowed !== undefined ? s.entryAllowed : true,
+      verificationHistory: s.verificationHistory || [
+        { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'Biometric Security Enrolled' }
+      ],
+      violationHistory: s.violationHistory || [],
+      snapshot: s.snapshot || s.photo || null
+    }));
+
+    const { data, error } = await supabase.from('students').insert(records).select();
+    if (error) throw error;
+
+    res.json({ success: true, count: data ? data.length : records.length, students: data || records });
+  } catch (err) {
+    console.error('Error adding student(s):', err.message);
     res.status(500).json({ success: false, error: err.message });
   }
 });

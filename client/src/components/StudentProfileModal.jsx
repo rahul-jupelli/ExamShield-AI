@@ -196,12 +196,6 @@ export default function StudentProfileModal({
             >
               AI Security Analysis
             </button>
-            <button 
-              onClick={() => setActiveTab('timeline')}
-              className={`px-5 py-2.5 text-xs font-medium border-b-2 font-mono uppercase transition-all cursor-pointer ${activeTab === 'timeline' ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-white'}`}
-            >
-              History & Log Timeline
-            </button>
           </div>
 
           {/* TAB 1: Profile */}
@@ -321,26 +315,6 @@ export default function StudentProfileModal({
                 </div>
               </div>
 
-            </div>
-          )}
-
-          {/* TAB 3: History & Log Timeline */}
-          {activeTab === 'timeline' && (
-            <div className="space-y-4">
-              <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider">Gate Check & Rover Patrol Timeline</h3>
-              
-              <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-1.5 before:bottom-1.5 before:w-0.5 before:bg-blue-900/30">
-                {student.verificationHistory && student.verificationHistory.map((historyItem, i) => (
-                  <div key={i} className="relative group text-xs">
-                    <span className="absolute -left-6 top-1 h-4.5 w-4.5 rounded-full bg-slate-900 border border-blue-500 flex items-center justify-center font-bold text-[8px] text-blue-400 group-hover:bg-blue-600 group-hover:text-white transition-all">
-                      {i + 1}
-                    </span>
-                    <div className="p-3 rounded-xl bg-[#010409]/40 border border-blue-900/20 font-sans text-slate-300">
-                      {historyItem}
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 

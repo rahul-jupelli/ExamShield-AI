@@ -15,7 +15,9 @@ import {
   Radio,
   Sun,
   Moon,
-  Home
+  Home,
+  UserCheck,
+  UserPlus
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -34,6 +36,7 @@ export default function Sidebar({
 
   const MENU_ITEMS = [
     { id: 'dashboard', label: 'Live Monitoring', icon: LayoutDashboard, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
+    { id: 'add-student', label: 'Student Enrollment', icon: UserPlus, roles: ['Admin', 'Exam Controller', 'Operator'] },
     { id: 'rover', label: 'Rover Surveillance', icon: Cpu, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
     { id: 'alerts', label: 'Active Alerts', icon: AlertTriangle, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'], badgeCount: true },
     { id: 'reports', label: 'Incident Reports', icon: FileText, roles: ['Admin', 'Exam Controller', 'Operator'] },
