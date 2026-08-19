@@ -419,7 +419,8 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
-                        e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'Cadet')}&background=0D8ABC&color=fff&bold=true`;
                       }}
                     />
                     <div className="absolute top-1.5 left-1.5 bg-rose-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded uppercase font-mono tracking-wider shadow">
@@ -496,7 +497,8 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
                       referrerPolicy="no-referrer"
                       onError={(e) => {
-                        e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'Cadet')}&background=0D8ABC&color=fff&bold=true`;
                       }}
                     />
                     <div className="absolute top-1.5 left-1.5 bg-amber-500 text-slate-950 text-[8px] font-black px-1.5 py-0.5 rounded uppercase font-mono shadow">
@@ -559,7 +561,8 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                     className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-white/5 grayscale group-hover:grayscale-0 transition-all bg-slate-100 dark:bg-slate-900 flex-shrink-0"
                     referrerPolicy="no-referrer"
                     onError={(e) => {
-                      e.currentTarget.src = 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80';
+                      e.currentTarget.onerror = null;
+                      e.currentTarget.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(student.name || 'Cadet')}&background=0D8ABC&color=fff&bold=true`;
                     }}
                   />
                   <div className="flex-1 min-w-0 flex flex-col justify-center">

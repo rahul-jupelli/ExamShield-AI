@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { uploadStudentPhotoToSupabase } from '../services/storageService';
 import {
   UserPlus,
   Shield,
@@ -209,6 +210,15 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
 
     setIsSubmitting(true);
     try {
+      // 1. Upload enrollment photo to Supabase Storage Bucket ('student-photos')
+      const photoUrl = await uploadStudentPhotoToSupabase(
+        formData.photo,
+        formData.hallTicket.trim() || formData.name.trim() || 'cadet'
+      );
+
+      // 2. Update local form state with the permanent Supabase Storage URL
+      setFormData(prev => ({ ...prev, photo: photoUrl }));
+
       const newStudent = {
         id: `STU-${Math.floor(1000 + Math.random() * 9000)}`,
         name: formData.name.trim(),
@@ -216,7 +226,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
         branch: formData.branch,
         room: formData.room,
         seat: formData.seat,
-        photo: formData.photo,
+        photo: photoUrl,
         status: formData.status,
         detectedDevice: formData.status === 'Device Detected' ? (formData.detectedDevice || 'Mobile Phone RF Signal') : null,
         suspicionReason: formData.status === 'Suspicious' ? (formData.suspicionReason || 'Unusual head movement telemetry') : null,
@@ -227,7 +237,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
         verificationCompleted: true,
         timestamp: new Date().toISOString(),
         verificationHistory: [
-          { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'Quantum Biometric Enrolled' }
+          { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'Quantum Biometric Enrolled (Supabase Storage Photo Sync)' }
         ],
         violationHistory: formData.status === 'Device Detected' ? [
           { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'Device Detected', detail: 'RF signature match on registration' }
@@ -294,10 +304,18 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
     if (parsedBulkStudents.length === 0) return;
     setIsSubmitting(true);
     try {
+      // Upload images for any batch items that have custom/base64 photo data
+      const updatedStudents = await Promise.all(
+        parsedBulkStudents.map(async (student) => {
+          const photoUrl = await uploadStudentPhotoToSupabase(student.photo, student.hallTicket || student.name);
+          return { ...student, photo: photoUrl };
+        })
+      );
+
       if (onAddStudent) {
-        await onAddStudent(parsedBulkStudents);
+        await onAddStudent(updatedStudents);
       }
-      alert(`Successfully registered ${parsedBulkStudents.length} cadets into Supabase!`);
+      alert(`Successfully registered ${updatedStudents.length} cadets into Supabase!`);
       if (onNavigateToDashboard) onNavigateToDashboard();
     } catch (err) {
       alert("Bulk registration error: " + err.message);

@@ -229,3 +229,33 @@ VALUES (
   '[{"name": "Prof. S. Rangan", "role": "Exam Controller", "active": true}, {"name": "Officer Kiran Kumar", "role": "Operator", "active": true}, {"name": "Dr. Helen Carter", "role": "Admin", "active": true}, {"name": "Viewer Account", "role": "Viewer", "active": true}]'::jsonb
 )
 ON CONFLICT (id) DO UPDATE SET "aiThreshold" = EXCLUDED."aiThreshold", updated_at = NOW();
+
+-- ==========================================
+-- Supabase Storage Bucket Setup (Student Photos - PRIVATE)
+-- ==========================================
+
+-- Create PRIVATE Storage Bucket for Student Enrollment Photos
+-- Bucket is NOT public — images are accessed via signed URLs only
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('student-photos', 'student-photos', false)
+ON CONFLICT (id) DO UPDATE SET public = false;
+
+-- Allow the anon key (used by the app) to SELECT (read/download) files
+DROP POLICY IF EXISTS "Anon Read Access for student-photos" ON storage.objects;
+CREATE POLICY "Anon Read Access for student-photos"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'student-photos');
+
+-- Allow the anon key to INSERT (upload) files
+DROP POLICY IF EXISTS "Anon Insert Access for student-photos" ON storage.objects;
+CREATE POLICY "Anon Insert Access for student-photos"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'student-photos');
+
+-- Allow the anon key to UPDATE (upsert) files
+DROP POLICY IF EXISTS "Anon Update Access for student-photos" ON storage.objects;
+CREATE POLICY "Anon Update Access for student-photos"
+  ON storage.objects FOR UPDATE
+  USING (bucket_id = 'student-photos');
+
+

@@ -22,6 +22,7 @@ import HealthView from './components/HealthView';
 import HistoryView from './components/HistoryView';
 import SettingsView from './components/SettingsView';
 import AddStudentView from './components/AddStudentView';
+import { fetchStudentPhotoFromSupabase } from './services/storageService';
 
 export default function App() {
   // 1. Session state (auth)
@@ -153,6 +154,28 @@ export default function App() {
     ]
   });
 
+  // --- Resolve student photos from private Supabase bucket ---
+  const resolveStudentBucketPhotos = useCallback(async (studentList) => {
+    try {
+      const resolved = await Promise.all(
+        studentList.map(async (s) => {
+          try {
+            const bucketUrl = await fetchStudentPhotoFromSupabase(s);
+            if (bucketUrl && bucketUrl !== s.photo) {
+              return { ...s, photo: bucketUrl };
+            }
+            return s;
+          } catch {
+            return s;
+          }
+        })
+      );
+      setStudents(resolved);
+    } catch (err) {
+      console.warn('[App] Bucket photo resolution failed:', err);
+    }
+  }, []);
+
   // 4. Detailed focus modal target
   const [selectedStudent, setSelectedStudent] = useState(null);
 
@@ -217,12 +240,14 @@ export default function App() {
         fetch('/api/settings').then(r => r.json()),
       ]);
 
-      // Deduplicate fetched students and alerts to keep original entries only
+      // Deduplicate fetched students strictly by unique ID or unique Hall Ticket
       const uniqueStudentsMap = new Map();
       (studentsRes || []).forEach(s => {
-        const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+        const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
         if (key && !uniqueStudentsMap.has(key)) {
           uniqueStudentsMap.set(key, s);
+        } else if (!key) {
+          uniqueStudentsMap.set(Math.random().toString(), s);
         }
       });
 
@@ -234,7 +259,12 @@ export default function App() {
         }
       });
 
-      setStudents(Array.from(uniqueStudentsMap.values()));
+      const uniqueStudents = Array.from(uniqueStudentsMap.values());
+      setStudents(uniqueStudents);
+
+      // Resolve bucket photos in the background so dashboard cards show correct images
+      resolveStudentBucketPhotos(uniqueStudents);
+
       setAlerts(Array.from(uniqueAlertsMap.values()));
       setRover(roverRes);
       setMetrics(metricsRes);
@@ -422,9 +452,11 @@ export default function App() {
       setStudents(prev => {
         const uniqueMap = new Map();
         [...newItems, ...prev].forEach(s => {
-          const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+          const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
           if (key && !uniqueMap.has(key)) {
             uniqueMap.set(key, s);
+          } else if (!key) {
+            uniqueMap.set(Math.random().toString(), s);
           }
         });
         return Array.from(uniqueMap.values());
@@ -640,12 +672,13 @@ export default function App() {
           role={session.role}
           theme={theme}
           onClose={() => setSelectedStudent(null)}
-          onUpdateDecision={(sId, dec) => {
+          onUpdateDecision={(sId, dec, fields) => {
             setStudents(prev => prev.map(s => s.id === sId ? {
               ...s,
+              ...fields,
               entryDecision: dec,
-              status: dec === 'Allowed' ? 'Verified Safe' : s.status,
-              entryAllowed: dec === 'Allowed' ? true : dec === 'Denied' ? false : undefined
+              status: dec === 'Allowed' ? 'Verified Safe' : 'Device Detected',
+              entryAllowed: dec === 'Allowed'
             } : s));
           }}
         />

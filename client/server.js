@@ -47,15 +47,15 @@ async function cleanDuplicateDatabaseRecords() {
       }
 
       if (duplicateStudentIdsToDelete.length > 0) {
-        console.log(`[DEDUPLICATION] Found ${duplicateStudentIdsToDelete.length} duplicate student records in Supabase. Removing...`);
+        console.log(`Found ${duplicateStudentIdsToDelete.length} duplicate student records in Supabase. Removing...`);
         const { error: delErr } = await supabase.from('students').delete().in('id', duplicateStudentIdsToDelete);
         if (delErr) {
-          console.error('[DEDUPLICATION] Delete student duplicates error:', delErr.message);
+          console.error('Delete student duplicates error:', delErr.message);
         } else {
-          console.log(`[DEDUPLICATION] Cleaned ${duplicateStudentIdsToDelete.length} duplicate student records.`);
+          console.log(`Cleaned ${duplicateStudentIdsToDelete.length} duplicate student records.`);
         }
       } else {
-        console.log('[DEDUPLICATION] Students table is clean. No duplicates found.');
+        console.log('Students table is clean. No duplicates found.');
       }
     }
 
@@ -77,19 +77,19 @@ async function cleanDuplicateDatabaseRecords() {
       }
 
       if (duplicateAlertIdsToDelete.length > 0) {
-        console.log(`[DEDUPLICATION] Found ${duplicateAlertIdsToDelete.length} duplicate alert records in Supabase. Removing...`);
+        console.log(`Found ${duplicateAlertIdsToDelete.length} duplicate alert records in Supabase. Removing...`);
         const { error: delErr } = await supabase.from('live_alerts').delete().in('id', duplicateAlertIdsToDelete);
         if (delErr) {
-          console.error('[DEDUPLICATION] Delete alert duplicates error:', delErr.message);
+          console.error('Delete alert duplicates error:', delErr.message);
         } else {
-          console.log(`[DEDUPLICATION] Cleaned ${duplicateAlertIdsToDelete.length} duplicate alert records.`);
+          console.log(`Cleaned ${duplicateAlertIdsToDelete.length} duplicate alert records.`);
         }
       } else {
-        console.log('[DEDUPLICATION] Live alerts table is clean. No duplicates found.');
+        console.log('Live alerts table is clean. No duplicates found.');
       }
     }
   } catch (err) {
-    console.error('[DEDUPLICATION] Error performing database cleanup:', err.message);
+    console.error('Error performing database cleanup:', err.message);
   }
 }
 
@@ -152,15 +152,17 @@ app.post('/api/auth/login', (req, res) => {
 // Students (Deduplicated response)
 app.get('/api/students', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('students').select('*').order('id');
+    const { data, error } = await supabase.from('students').select('*').order('timestamp', { ascending: false });
     if (error) throw error;
     
-    // Deduplicate by hallTicket / name / id to keep original rows only
+    // Deduplicate strictly by unique ID or unique Hall Ticket
     const uniqueMap = new Map();
     (data || []).forEach(s => {
-      const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
-      if (!uniqueMap.has(key)) {
+      const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
+      if (key && !uniqueMap.has(key)) {
         uniqueMap.set(key, s);
+      } else if (!key) {
+        uniqueMap.set(Math.random().toString(), s);
       }
     });
 
@@ -221,6 +223,7 @@ app.post('/api/students/:id/decision', async (req, res) => {
     updateFields.status = 'Verified Safe';
     updateFields.entryAllowed = true;
   } else if (decision === 'Denied') {
+    updateFields.status = 'Device Detected';
     updateFields.entryAllowed = false;
   }
 
