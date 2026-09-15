@@ -6,7 +6,8 @@ import {
   ShieldAlert,
   Volume2
 } from 'lucide-react';
-import { supabase } from "./lib/supabase";
+import { supabase, clearCorruptedSupabaseStorage } from "./lib/supabase";
+
 
 // Importing Custom Subviews
 import LandingView from './components/LandingView';
@@ -73,12 +74,14 @@ export default function App() {
       try {
         const { data, error } = await supabase.auth.getSession();
         if (error) {
-          console.error("Error fetching session:", error.message);
+          console.warn("Session retrieval notice:", error.message);
+          clearCorruptedSupabaseStorage();
         } else if (data?.session?.user) {
           setSession(formatUserData(data.session.user));
         }
       } catch (err) {
-        console.error("Session restoration failed:", err);
+        console.warn("Session restoration notice:", err);
+        clearCorruptedSupabaseStorage();
       } finally {
         setAuthLoading(false);
       }
@@ -86,17 +89,24 @@ export default function App() {
 
     getSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (currentSession?.user) {
-        setSession(formatUserData(currentSession.user));
-      } else {
-        setSession(null);
-      }
-      setAuthLoading(false);
-    });
+    let subscription;
+    try {
+      const authListener = supabase.auth.onAuthStateChange((_event, currentSession) => {
+        if (currentSession?.user) {
+          setSession(formatUserData(currentSession.user));
+        }
+        setAuthLoading(false);
+      });
+      subscription = authListener.data?.subscription;
+    } catch (e) {
+      console.warn("Auth listener notice:", e);
+    }
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
+
 
 
   // 2. Navigation State
@@ -232,48 +242,57 @@ export default function App() {
   const hydrateAllStates = useCallback(async () => {
     try {
       const [studentsRes, alertsRes, roverRes, metricsRes, logsRes, settingsRes] = await Promise.all([
-        fetch('/api/students').then(r => r.json()),
-        fetch('/api/alerts').then(r => r.json()),
-        fetch('/api/rover').then(r => r.json()),
-        fetch('/api/metrics').then(r => r.json()),
-        fetch('/api/logs').then(r => r.json()),
-        fetch('/api/settings').then(r => r.json()),
+        fetch('/api/students').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/alerts').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/rover').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/metrics').then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch('/api/logs').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/settings').then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
 
-      // Deduplicate fetched students strictly by unique ID or unique Hall Ticket
-      const uniqueStudentsMap = new Map();
-      (studentsRes || []).forEach(s => {
-        const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
-        if (key && !uniqueStudentsMap.has(key)) {
-          uniqueStudentsMap.set(key, s);
-        } else if (!key) {
-          uniqueStudentsMap.set(Math.random().toString(), s);
-        }
-      });
+      if (Array.isArray(studentsRes) && studentsRes.length > 0) {
+        const uniqueStudentsMap = new Map();
+        studentsRes.forEach(s => {
+          const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
+          if (key && !uniqueStudentsMap.has(key)) {
+            uniqueStudentsMap.set(key, s);
+          } else if (!key) {
+            uniqueStudentsMap.set(Math.random().toString(), s);
+          }
+        });
+        const uniqueStudents = Array.from(uniqueStudentsMap.values());
+        setStudents(uniqueStudents);
+        resolveStudentBucketPhotos(uniqueStudents);
+      }
 
-      const uniqueAlertsMap = new Map();
-      (alertsRes || []).forEach(a => {
-        const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
-        if (key && !uniqueAlertsMap.has(key)) {
-          uniqueAlertsMap.set(key, a);
-        }
-      });
+      if (Array.isArray(alertsRes) && alertsRes.length > 0) {
+        const uniqueAlertsMap = new Map();
+        alertsRes.forEach(a => {
+          const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
+          if (key && !uniqueAlertsMap.has(key)) {
+            uniqueAlertsMap.set(key, a);
+          }
+        });
+        setAlerts(Array.from(uniqueAlertsMap.values()));
+      }
 
-      const uniqueStudents = Array.from(uniqueStudentsMap.values());
-      setStudents(uniqueStudents);
-
-      // Resolve bucket photos in the background so dashboard cards show correct images
-      resolveStudentBucketPhotos(uniqueStudents);
-
-      setAlerts(Array.from(uniqueAlertsMap.values()));
-      setRover(roverRes);
-      setMetrics(metricsRes);
-      setLogs(logsRes);
-      setSettings(settingsRes);
+      if (roverRes && !roverRes.error && roverRes.battery !== undefined) {
+        setRover(roverRes);
+      }
+      if (metricsRes && !metricsRes.error && metricsRes.cpu !== undefined) {
+        setMetrics(metricsRes);
+      }
+      if (Array.isArray(logsRes) && logsRes.length > 0) {
+        setLogs(logsRes);
+      }
+      if (settingsRes && !settingsRes.error && settingsRes.examHalls) {
+        setSettings(settingsRes);
+      }
     } catch (e) {
-      console.error('Failed to pre-hydrate states over REST.', e);
+      console.warn('REST hydration notice:', e);
     }
-  }, []);
+  }, [resolveStudentBucketPhotos]);
+
 
   // Hydrate once logged in
   useEffect(() => {
@@ -516,7 +535,11 @@ export default function App() {
 
   // Render subviews dynamically
   const renderTabContent = () => {
-    if (!rover || !metrics || !settings) {
+    const isRoverValid = rover && rover.battery !== undefined;
+    const isMetricsValid = metrics && metrics.cpu !== undefined;
+    const isSettingsValid = settings && settings.examHalls;
+
+    if (!isRoverValid || !isMetricsValid || !isSettingsValid) {
       return (
         <div className="flex flex-col items-center justify-center min-h-[50vh] text-slate-400 font-mono">
           <div className="h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
@@ -524,6 +547,7 @@ export default function App() {
         </div>
       );
     }
+
 
     switch (activeTab) {
       case 'dashboard':
