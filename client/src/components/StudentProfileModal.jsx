@@ -22,7 +22,9 @@ import {
 } from 'lucide-react';
 import GlassCard from './GlassCard';
 import { supabase } from '../lib/supabase';
-import { listStudentImagesFromBucket } from '../services/storageService';
+import { listStudentImagesFromBucket, getBucketPublicUrl } from '../services/storageService';
+import { parseEmbedding, formatEmbeddingPreview } from '../services/embeddingService';
+import StudentQRCode from './StudentQRCode';
 
 export default function StudentProfileModal({ 
   student = {}, 
@@ -35,7 +37,7 @@ export default function StudentProfileModal({
   const [activeTab, setActiveTab] = useState('profile');
   const [bucketImages, setBucketImages] = useState([]);
   const [loadingImages, setLoadingImages] = useState(true);
-  const [activePhotoUrl, setActivePhotoUrl] = useState(student.photo || '');
+  const [activePhotoUrl, setActivePhotoUrl] = useState(() => getBucketPublicUrl(student.photo) || student.photo || '');
   const [localStudent, setLocalStudent] = useState(student);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
 
@@ -59,7 +61,7 @@ export default function StudentProfileModal({
           if (images.length > 0) {
             setActivePhotoUrl(images[0].url);
           } else if (student.photo) {
-            setActivePhotoUrl(student.photo);
+            setActivePhotoUrl(getBucketPublicUrl(student.photo) || student.photo);
           }
         }
       } catch (err) {
@@ -182,7 +184,7 @@ export default function StudentProfileModal({
             {/* Student Photo */}
             <div className="relative w-full md:w-44 h-52 rounded-2xl overflow-hidden border border-blue-900/30 bg-slate-950 flex-shrink-0 group">
               <img 
-                src={activePhotoUrl || localStudent.photo} 
+                src={getBucketPublicUrl(activePhotoUrl || localStudent.photo) || activePhotoUrl || localStudent.photo} 
                 alt={localStudent.name} 
                 className="w-full h-full object-cover"
                 referrerPolicy="no-referrer"
@@ -317,9 +319,13 @@ export default function StudentProfileModal({
             </button>
           </div>
 
-          {/* TAB 1: Profile */}
+          {/* TAB 1: Profile Details */}
           {activeTab === 'profile' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-6">
+              {/* Dynamic QR Code generated from Student Column ID */}
+              <StudentQRCode student={localStudent} theme={theme} />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
                 <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider">Student Academic Record</h3>
                 <div className="rounded-2xl border border-blue-900/20 bg-[#010409]/40 p-4 space-y-3 text-xs">
@@ -363,6 +369,7 @@ export default function StudentProfileModal({
                   </div>
                 </div>
               </div>
+            </div>
             </div>
           )}
 
@@ -510,6 +517,35 @@ export default function StudentProfileModal({
                   </div>
                 </div>
               )}
+
+              {/* Neural Face Embedding Vector Section */}
+              <div className="space-y-2.5">
+                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>NEURAL FACE EMBEDDING VECTOR REGISTRY</span>
+                  <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                    512D VECTOR ACTIVE
+                  </span>
+                </h3>
+                <div className="rounded-2xl border border-blue-900/30 bg-[#010409]/60 p-4 text-xs space-y-3 font-mono">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-blue-900/20 pb-3">
+                    <div className="flex items-center gap-2 text-slate-300">
+                      <Sparkles className="h-4 w-4 text-blue-400" />
+                      <span className="font-bold">Database Column:</span>
+                      <code className="text-blue-300 font-bold bg-blue-950/60 px-1.5 py-0.5 rounded">public.students.faceEmbedding</code>
+                    </div>
+                    <span className="text-emerald-400 text-[11px] font-bold">
+                      {parseEmbedding(student.faceEmbedding || student.face_embedding) ? 'VALID 512-DIMENSIONAL ARRAY' : 'SYNTHESIZING VECTOR...'}
+                    </span>
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-300 overflow-x-auto">
+                    <span className="text-slate-500 block text-[9px] uppercase tracking-wider mb-1">Raw Embedding Vector Preview (512 Float Dimensions)</span>
+                    <code className="text-emerald-300 text-[11px] break-all block">
+                      {formatEmbeddingPreview(student.faceEmbedding || student.face_embedding)}
+                    </code>
+                  </div>
+                </div>
+              </div>
 
               {/* Infraction Log details */}
               <div className="space-y-2.5">

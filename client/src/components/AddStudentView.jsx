@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { uploadStudentPhotoToSupabase } from '../services/storageService';
+import StudentQRCode from './StudentQRCode';
+import { generateFaceEmbedding } from '../services/embeddingService';
 import {
   UserPlus,
   Shield,
@@ -30,14 +31,12 @@ import {
   Maximize2
 } from 'lucide-react';
 
-const PRESET_AVATARS = [
-  { id: 'av1', url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=300&auto=format&fit=crop&q=80', label: 'Cadet Female A' },
-  { id: 'av2', url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&auto=format&fit=crop&q=80', label: 'Cadet Male A' },
-  { id: 'av3', url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=300&auto=format&fit=crop&q=80', label: 'Cadet Female B' },
-  { id: 'av4', url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=300&auto=format&fit=crop&q=80', label: 'Cadet Male B' },
-  { id: 'av5', url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=300&auto=format&fit=crop&q=80', label: 'Cadet Female C' },
-  { id: 'av6', url: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=300&auto=format&fit=crop&q=80', label: 'Cadet Male C' },
-];
+import {
+  uploadStudentPhotoToSupabase,
+  getBucketPublicUrl
+} from '../services/storageService';
+
+
 
 const BRANCH_OPTIONS = [
   'Computer Science & AI',
@@ -71,7 +70,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
     room: 'LH-302',
     seat: 'Seat 15',
     status: 'Verified Safe',
-    photo: PRESET_AVATARS[0].url,
+    photo: '',
     faceConfidence: 99.2,
     detectedDevice: '',
     suspicionReason: '',
@@ -167,6 +166,10 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
   // Simulated Camera Capture
   const toggleCameraStream = async () => {
     if (isCameraActive) {
+      if (videoRef.current?.srcObject) {
+        videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
       setIsCameraActive(false);
       return;
     }
@@ -191,7 +194,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
       ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/png');
       setFormData(prev => ({ ...prev, photo: dataUrl }));
-      
+
       // stop stream
       const tracks = videoRef.current.srcObject.getTracks();
       tracks.forEach(track => track.stop());
@@ -203,55 +206,127 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
   // Submit Single Student Form
   const handleSubmitSingle = async (e) => {
     e.preventDefault();
+
     if (!formData.name.trim()) {
-      alert("Please enter cadet full name.");
+      alert('Please enter cadet full name.');
+      return;
+    }
+
+    if (!formData.photo) {
+      alert('Please upload or capture a student photo.');
+      return;
+    }
+
+    // Only images selected/captured in this form are allowed.
+    if (
+      typeof formData.photo === 'string' &&
+      formData.photo.startsWith('http')
+    ) {
+      alert('Please upload or capture the student photo. External/preset images cannot be registered.');
       return;
     }
 
     setIsSubmitting(true);
+
     try {
-      // 1. Upload enrollment photo to Supabase Storage Bucket ('student-photos')
-      const photoUrl = await uploadStudentPhotoToSupabase(
+      // 1. Upload the enrollment image to Supabase Storage.
+      const photoPath = await uploadStudentPhotoToSupabase(
         formData.photo,
-        formData.hallTicket.trim() || formData.name.trim() || 'cadet'
+        formData.hallTicket.trim() || formData.name.trim()
       );
 
-      // 2. Update local form state with the permanent Supabase Storage URL
-      setFormData(prev => ({ ...prev, photo: photoUrl }));
+      // 2. Build the URL for the EXACT uploaded file.
+      const photoUrl = getBucketPublicUrl(photoPath);
+
+      if (!photoUrl || !photoUrl.includes('student-photos')) {
+        throw new Error(
+          'The student photo was uploaded, but its Supabase Storage URL could not be created.'
+        );
+      }
+
+      // 3. Generate the REAL FaceNet embedding from the uploaded image.
+      const faceEmbeddingJson = await generateFaceEmbedding(formData.photo);
+      const parsedEmbedding = JSON.parse(faceEmbeddingJson);
+
+      // 4. Validate the embedding before creating the student record.
+      if (
+        !Array.isArray(parsedEmbedding) ||
+        parsedEmbedding.length !== 512 ||
+        parsedEmbedding.some(value => !Number.isFinite(Number(value)))
+      ) {
+        throw new Error(
+          'Face embedding validation failed. Expected exactly 512 valid numbers.'
+        );
+      }
 
       const newStudent = {
         id: `STU-${Math.floor(1000 + Math.random() * 9000)}`,
         name: formData.name.trim(),
-        hallTicket: formData.hallTicket.trim() || `HT-2026-${Math.floor(10000 + Math.random() * 90000)}`,
+        hallTicket:
+          formData.hallTicket.trim() ||
+          `HT-${new Date().getFullYear()}-${Math.floor(10000 + Math.random() * 90000)}`,
         branch: formData.branch,
         room: formData.room,
         seat: formData.seat,
         photo: photoUrl,
+        faceEmbedding: JSON.stringify(parsedEmbedding),
         status: formData.status,
-        detectedDevice: formData.status === 'Device Detected' ? (formData.detectedDevice || 'Mobile Phone RF Signal') : null,
-        suspicionReason: formData.status === 'Suspicious' ? (formData.suspicionReason || 'Unusual head movement telemetry') : null,
-        suspicionScore: formData.status === 'Suspicious' ? 68 : formData.status === 'Device Detected' ? 92 : 0,
+        detectedDevice:
+          formData.status === 'Device Detected'
+            ? formData.detectedDevice || 'Mobile Phone RF Signal'
+            : null,
+        suspicionReason:
+          formData.status === 'Suspicious'
+            ? formData.suspicionReason || 'Unusual head movement telemetry'
+            : null,
+        suspicionScore:
+          formData.status === 'Suspicious'
+            ? 68
+            : formData.status === 'Device Detected'
+              ? 92
+              : 0,
         faceConfidence: parseFloat(formData.faceConfidence) || 99.2,
-        entryDecision: formData.status === 'Device Detected' ? 'Denied' : 'Allowed',
+        entryDecision:
+          formData.status === 'Device Detected' ? 'Denied' : 'Allowed',
         entryAllowed: formData.status !== 'Device Detected',
         verificationCompleted: true,
         timestamp: new Date().toISOString(),
         verificationHistory: [
-          { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'Quantum Biometric Enrolled (Supabase Storage Photo Sync)' }
+          {
+            time: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit',
+            }),
+            status: 'Biometric Enrolled (512D FaceNet Embedding Generated)',
+          },
         ],
-        violationHistory: formData.status === 'Device Detected' ? [
-          { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), type: 'Device Detected', detail: 'RF signature match on registration' }
-        ] : []
+        violationHistory:
+          formData.status === 'Device Detected'
+            ? [
+                {
+                  time: new Date().toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }),
+                  type: 'Device Detected',
+                  detail: 'RF signature match on registration',
+                },
+              ]
+            : [],
       };
 
-      if (onAddStudent) {
-        await onAddStudent(newStudent);
+      if (!onAddStudent) {
+        throw new Error('Student save handler is not available.');
       }
-      
+
+      // 5. App sends the validated record to /api/students.
+      await onAddStudent(newStudent);
+
+      setFormData(prev => ({ ...prev, photo: photoUrl }));
       setSuccessModal(newStudent);
     } catch (err) {
-      console.error("Failed to enroll student:", err);
-      alert("Error saving student to database: " + err.message);
+      console.error('[AddStudent] Enrollment failed:', err);
+      alert(`Student registration failed:\n\n${err.message}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -300,39 +375,22 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
   };
 
   // Submit Bulk Batch
+  // CSV rows do not contain actual face images, so biometric enrollment is
+  // deliberately disabled here. Use Single Cadet enrollment for real photos.
   const handleSubmitBatch = async () => {
-    if (parsedBulkStudents.length === 0) return;
-    setIsSubmitting(true);
-    try {
-      // Upload images for any batch items that have custom/base64 photo data
-      const updatedStudents = await Promise.all(
-        parsedBulkStudents.map(async (student) => {
-          const photoUrl = await uploadStudentPhotoToSupabase(student.photo, student.hallTicket || student.name);
-          return { ...student, photo: photoUrl };
-        })
-      );
-
-      if (onAddStudent) {
-        await onAddStudent(updatedStudents);
-      }
-      alert(`Successfully registered ${updatedStudents.length} cadets into Supabase!`);
-      if (onNavigateToDashboard) onNavigateToDashboard();
-    } catch (err) {
-      alert("Bulk registration error: " + err.message);
-    } finally {
-      setIsSubmitting(false);
-    }
+    alert(
+      'Bulk CSV import cannot create face embeddings because CSV rows do not contain student photos. Please use Single Cadet enrollment with an uploaded or captured photo.'
+    );
   };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300 pb-12">
-      
+
       {/* Dynamic Cyber Header Banner */}
-      <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden shadow-2xl transition-all ${
-        isLight
+      <div className={`p-6 sm:p-8 rounded-3xl border relative overflow-hidden shadow-2xl transition-all ${isLight
           ? 'bg-gradient-to-r from-blue-50 via-indigo-50/60 to-white border-blue-200 text-slate-900'
           : 'bg-gradient-to-r from-[#0d1326] via-[#101935] to-[#0a0e1a] border-blue-500/30 text-white'
-      }`}>
+        }`}>
         {/* Animated Cyber Gridlines & Glows */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#1f293710_1px,transparent_1px),linear-gradient(to_bottom,#1f293710_1px,transparent_1px)] bg-[size:2rem_2rem] pointer-events-none opacity-40" />
         <div className="absolute -right-20 -top-20 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -358,27 +416,24 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
           </div>
 
           {/* Mode Selector Tabs */}
-          <div className={`p-1.5 rounded-2xl border flex items-center gap-1 shrink-0 ${
-            isLight ? 'bg-slate-200/80 border-slate-300' : 'bg-[#151c33] border-slate-800'
-          }`}>
+          <div className={`p-1.5 rounded-2xl border flex items-center gap-1 shrink-0 ${isLight ? 'bg-slate-200/80 border-slate-300' : 'bg-[#151c33] border-slate-800'
+            }`}>
             <button
               onClick={() => setEnrollmentMode('single')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                enrollmentMode === 'single'
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${enrollmentMode === 'single'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : isLight ? 'text-slate-700 hover:bg-slate-300/50' : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               <UserPlus className="h-4 w-4" />
               <span>Single Cadet</span>
             </button>
             <button
               onClick={() => setEnrollmentMode('batch')}
-              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
-                enrollmentMode === 'batch'
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${enrollmentMode === 'batch'
                   ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
                   : isLight ? 'text-slate-700 hover:bg-slate-300/50' : 'text-slate-400 hover:text-white'
-              }`}
+                }`}
             >
               <FileSpreadsheet className="h-4 w-4" />
               <span>Bulk CSV Import</span>
@@ -399,9 +454,8 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
               </div>
               <div className="flex-1 max-w-md h-2 rounded-full bg-slate-800/80 overflow-hidden p-0.5 border border-slate-700">
                 <div
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    readinessScore >= 80 ? 'bg-gradient-to-r from-blue-500 to-emerald-400' : readinessScore >= 50 ? 'bg-amber-400' : 'bg-rose-500'
-                  }`}
+                  className={`h-full rounded-full transition-all duration-500 ${readinessScore >= 80 ? 'bg-gradient-to-r from-blue-500 to-emerald-400' : readinessScore >= 50 ? 'bg-amber-400' : 'bg-rose-500'
+                    }`}
                   style={{ width: `${readinessScore}%` }}
                 />
               </div>
@@ -418,13 +472,12 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
       {/* SINGLE STUDENT ENROLLMENT MODE */}
       {enrollmentMode === 'single' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          
+
           {/* Left Column: Form Controls (7 cols) */}
           <div className="lg:col-span-7 space-y-6">
-            <form onSubmit={handleSubmitSingle} className={`p-6 sm:p-8 rounded-3xl border shadow-xl space-y-6 transition-all ${
-              isLight ? 'bg-white border-slate-200' : 'bg-[#0b1021] border-slate-800'
-            }`}>
-              
+            <form onSubmit={handleSubmitSingle} className={`p-6 sm:p-8 rounded-3xl border shadow-xl space-y-6 transition-all ${isLight ? 'bg-white border-slate-200' : 'bg-[#0b1021] border-slate-800'
+              }`}>
+
               <div className="flex items-center justify-between pb-4 border-b border-slate-800/60">
                 <h3 className="text-base font-bold flex items-center gap-2">
                   <UserCheck className="h-5 w-5 text-blue-400" />
@@ -445,11 +498,10 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     placeholder="e.g. Sophia Vance"
                     value={formData.name}
                     onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-2xl text-sm font-medium border outline-none transition-all ${
-                      isLight
+                    className={`w-full px-4 py-3 rounded-2xl text-sm font-medium border outline-none transition-all ${isLight
                         ? 'bg-slate-50 border-slate-300 focus:border-blue-500 focus:bg-white text-slate-900'
                         : 'bg-[#12182c] border-slate-800 focus:border-blue-500/80 focus:bg-[#161d36] text-white'
-                    }`}
+                      }`}
                   />
                 </div>
 
@@ -473,11 +525,10 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                       placeholder="HT-2026-XXXXX"
                       value={formData.hallTicket}
                       onChange={(e) => setFormData(prev => ({ ...prev, hallTicket: e.target.value }))}
-                      className={`w-full px-4 py-3 rounded-2xl text-sm font-mono font-semibold border outline-none transition-all ${
-                        isLight
+                      className={`w-full px-4 py-3 rounded-2xl text-sm font-mono font-semibold border outline-none transition-all ${isLight
                           ? 'bg-slate-50 border-slate-300 focus:border-blue-500 text-slate-900'
                           : 'bg-[#12182c] border-slate-800 focus:border-blue-500/80 text-white'
-                      }`}
+                        }`}
                     />
                     <Hash className="absolute right-3.5 top-3.5 h-4 w-4 text-slate-500 pointer-events-none" />
                   </div>
@@ -493,11 +544,10 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <select
                     value={formData.branch}
                     onChange={(e) => setFormData(prev => ({ ...prev, branch: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${
-                      isLight
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${isLight
                         ? 'bg-slate-50 border-slate-300 focus:border-blue-500 text-slate-900'
                         : 'bg-[#12182c] border-slate-800 focus:border-blue-500/80 text-white'
-                    }`}
+                      }`}
                   >
                     {BRANCH_OPTIONS.map(b => (
                       <option key={b} value={b} className="bg-slate-900 text-white">{b}</option>
@@ -512,11 +562,10 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <select
                     value={formData.room}
                     onChange={(e) => setFormData(prev => ({ ...prev, room: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${
-                      isLight
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${isLight
                         ? 'bg-slate-50 border-slate-300 focus:border-blue-500 text-slate-900'
                         : 'bg-[#12182c] border-slate-800 focus:border-blue-500/80 text-white'
-                    }`}
+                      }`}
                   >
                     {ROOM_OPTIONS.map(r => (
                       <option key={r} value={r} className="bg-slate-900 text-white">{r}</option>
@@ -536,11 +585,10 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     placeholder="e.g. Aisle B - Seat 15"
                     value={formData.seat}
                     onChange={(e) => setFormData(prev => ({ ...prev, seat: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium border outline-none transition-all ${
-                      isLight
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-medium border outline-none transition-all ${isLight
                         ? 'bg-slate-50 border-slate-300 focus:border-blue-500 text-slate-900'
                         : 'bg-[#12182c] border-slate-800 focus:border-blue-500/80 text-white'
-                    }`}
+                      }`}
                   />
                 </div>
 
@@ -551,13 +599,12 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${
-                      formData.status === 'Verified Safe'
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${formData.status === 'Verified Safe'
                         ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/20'
                         : formData.status === 'Suspicious'
-                        ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
-                        : 'text-rose-400 border-rose-500/40 bg-rose-950/20'
-                    }`}
+                          ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
+                          : 'text-rose-400 border-rose-500/40 bg-rose-950/20'
+                      }`}
                   >
                     <option value="Verified Safe" className="bg-slate-900 text-emerald-400">Verified Safe (Green)</option>
                     <option value="Suspicious" className="bg-slate-900 text-amber-400">Suspicious (Amber Watch)</option>
@@ -604,31 +651,14 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <span className="text-[10px] font-mono text-emerald-400">99.4% AI Match Confidence</span>
                 </div>
 
-                {/* Preset Avatars Bar */}
-                <div>
-                  <span className="block text-[11px] text-slate-400 mb-2 font-medium">Quick Preset Profiles:</span>
-                  <div className="grid grid-cols-6 gap-2">
-                    {PRESET_AVATARS.map((av) => (
-                      <button
-                        key={av.id}
-                        type="button"
-                        onClick={() => {
-                          setFormData(prev => ({ ...prev, photo: av.url }));
-                          triggerBiometricScan();
-                        }}
-                        className={`relative rounded-xl overflow-hidden border-2 aspect-square transition-all cursor-pointer group ${
-                          formData.photo === av.url ? 'border-blue-500 scale-105 shadow-lg shadow-blue-500/30' : 'border-slate-800 hover:border-slate-600'
-                        }`}
-                      >
-                        <img src={av.url} alt={av.label} className="w-full h-full object-cover" />
-                        {formData.photo === av.url && (
-                          <div className="absolute inset-0 bg-blue-600/30 flex items-center justify-center">
-                            <Check className="h-4 w-4 text-white" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                <div className={`rounded-2xl border p-3 text-[11px] ${
+                  isLight
+                    ? 'bg-blue-50 border-blue-200 text-blue-700'
+                    : 'bg-blue-950/20 border-blue-500/20 text-blue-300'
+                }`}>
+                  Use only the student's uploaded photo or a photo captured from the camera.
+                  Preset/external images are disabled because the biometric embedding must be
+                  generated from the actual enrollment image.
                 </div>
 
                 {/* Custom Photo Upload & Live Camera Capture */}
@@ -643,9 +673,8 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                      isLight ? 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-800' : 'bg-[#131a30] border-slate-800 hover:border-slate-700 text-slate-200'
-                    }`}
+                    className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${isLight ? 'bg-slate-100 border-slate-300 hover:bg-slate-200 text-slate-800' : 'bg-[#131a30] border-slate-800 hover:border-slate-700 text-slate-200'
+                      }`}
                   >
                     <Upload className="h-4 w-4 text-blue-400" />
                     Upload Custom Photo File
@@ -654,9 +683,8 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <button
                     type="button"
                     onClick={toggleCameraStream}
-                    className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${
-                      isCameraActive ? 'bg-rose-600 text-white border-rose-500' : 'bg-blue-600/20 border-blue-500/40 text-blue-300 hover:bg-blue-600/30'
-                    }`}
+                    className={`p-3 rounded-2xl border flex items-center justify-center gap-2 text-xs font-bold transition-all cursor-pointer ${isCameraActive ? 'bg-rose-600 text-white border-rose-500' : 'bg-blue-600/20 border-blue-500/40 text-blue-300 hover:bg-blue-600/30'
+                      }`}
                   >
                     <Camera className="h-4 w-4" />
                     {isCameraActive ? 'Cancel Optical Scan' : 'Live Camera Feed Scan'}
@@ -727,7 +755,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
               {/* Scanlines & Hologram Watermark */}
               <div className="absolute inset-0 bg-[linear-gradient(to_bottom,transparent_50%,rgba(0,0,0,0.4)_51%)] bg-[size:100%_4px] pointer-events-none opacity-40" />
               <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-2xl pointer-events-none" />
-              
+
               {/* Top Security Header */}
               <div className="flex items-center justify-between pb-4 border-b border-blue-500/30 relative z-10">
                 <div className="flex items-center gap-2">
@@ -737,13 +765,12 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     <p className="text-[9px] font-mono text-slate-400">STATE UNIVERSITY SURVEILLANCE</p>
                   </div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider ${
-                  formData.status === 'Verified Safe'
+                <span className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider ${formData.status === 'Verified Safe'
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                     : formData.status === 'Suspicious'
-                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                    : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
-                }`}>
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                  }`}>
                   {formData.status}
                 </span>
               </div>
@@ -756,7 +783,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     alt={formData.name}
                     className="w-full h-full object-cover"
                   />
-                  
+
                   {/* Cyber Facial Scan Mesh Overlay */}
                   <div className="absolute inset-0 border border-blue-400/40 rounded-2xl pointer-events-none flex flex-col justify-between p-1">
                     <div className="flex justify-between">
@@ -817,9 +844,8 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
             </div>
 
             {/* Quick Helper Banner */}
-            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${
-              isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0f152a] border-slate-800 text-slate-400'
-            }`}>
+            <div className={`p-4 rounded-2xl border text-xs space-y-2 ${isLight ? 'bg-slate-100 border-slate-200 text-slate-700' : 'bg-[#0f152a] border-slate-800 text-slate-400'
+              }`}>
               <div className="flex items-center gap-2 font-bold text-slate-200">
                 <Database className="h-4 w-4 text-blue-400" />
                 Real-Time Database Sync Info
@@ -838,9 +864,8 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
       {/* BULK CSV IMPORT MODE */}
       {enrollmentMode === 'batch' && (
         <div className="max-w-4xl mx-auto space-y-6">
-          <div className={`p-6 sm:p-8 rounded-3xl border shadow-xl space-y-6 ${
-            isLight ? 'bg-white border-slate-200' : 'bg-[#0b1021] border-slate-800'
-          }`}>
+          <div className={`p-6 sm:p-8 rounded-3xl border shadow-xl space-y-6 ${isLight ? 'bg-white border-slate-200' : 'bg-[#0b1021] border-slate-800'
+            }`}>
             <div>
               <h3 className="text-base font-bold flex items-center gap-2 text-white">
                 <FileSpreadsheet className="h-5 w-5 text-blue-400" />
@@ -930,7 +955,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
       {successModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="max-w-md w-full rounded-3xl p-6 sm:p-8 bg-gradient-to-b from-[#0e162c] to-[#070b15] border border-blue-500/50 shadow-2xl text-center space-y-6">
-            
+
             <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
               <CheckCircle2 className="h-8 w-8 animate-bounce" />
             </div>
@@ -943,6 +968,11 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
               <p className="text-xs text-slate-300 mt-2">
                 <strong className="text-white">{successModal.name}</strong> ({successModal.hallTicket}) has been registered and synced with all ground-patrolling rovers.
               </p>
+            </div>
+
+            {/* Automatically Displayed Unique QR Code for Newly Enrolled Cadet */}
+            <div className="text-left">
+              <StudentQRCode student={successModal} theme={theme} />
             </div>
 
             {/* Quick Pass Info Card */}
@@ -970,7 +1000,11 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     ...prev,
                     name: '',
                     hallTicket: '',
-                    status: 'Verified Safe'
+                    status: 'Verified Safe',
+                    photo: '',
+                    detectedDevice: '',
+                    suspicionReason: '',
+                    faceConfidence: 99.2
                   }));
                   generateHallTicket();
                 }}

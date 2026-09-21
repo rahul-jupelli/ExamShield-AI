@@ -19,6 +19,7 @@ import {
   User
 } from 'lucide-react';
 import GlassCard from './GlassCard';
+import { getBucketPublicUrl } from '../services/storageService';
 
 export default function DashboardView({ students = [], rover = {}, alerts = [], onSelectStudent, theme = 'dark' }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -414,7 +415,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                     isLight ? 'border-rose-300 bg-slate-200' : 'border-rose-500/30 bg-slate-900'
                   }`}>
                     <img 
-                      src={student.photo} 
+                      src={getBucketPublicUrl(student.photo) || student.photo} 
                       alt={student.name} 
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
                       referrerPolicy="no-referrer"
@@ -492,7 +493,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                     isLight ? 'border-amber-300 bg-slate-200' : 'border-amber-500/20 bg-slate-900'
                   }`}>
                     <img 
-                      src={student.photo} 
+                      src={getBucketPublicUrl(student.photo) || student.photo} 
                       alt={student.name} 
                       className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-300"
                       referrerPolicy="no-referrer"
@@ -556,7 +557,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
                   }`}
                 >
                   <img 
-                    src={student.photo} 
+                    src={getBucketPublicUrl(student.photo) || student.photo} 
                     alt={student.name} 
                     className="w-12 h-12 rounded-xl object-cover border border-slate-200 dark:border-white/5 grayscale group-hover:grayscale-0 transition-all bg-slate-100 dark:bg-slate-900 flex-shrink-0"
                     referrerPolicy="no-referrer"

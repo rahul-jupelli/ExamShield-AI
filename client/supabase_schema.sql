@@ -33,7 +33,8 @@ CREATE TABLE public.students (
   "entryAllowed" BOOLEAN DEFAULT FALSE,
   "verificationHistory" JSONB DEFAULT '[]'::jsonb,
   "violationHistory" JSONB DEFAULT '[]'::jsonb,
-  snapshot TEXT
+  snapshot TEXT,
+  "faceEmbedding" TEXT
 );
 
 -- 2. Create Table: live_alerts
@@ -231,14 +232,13 @@ VALUES (
 ON CONFLICT (id) DO UPDATE SET "aiThreshold" = EXCLUDED."aiThreshold", updated_at = NOW();
 
 -- ==========================================
--- Supabase Storage Bucket Setup (Student Photos - PRIVATE)
+-- Supabase Storage Bucket Setup (Student Photos - PUBLIC)
 -- ==========================================
 
--- Create PRIVATE Storage Bucket for Student Enrollment Photos
--- Bucket is NOT public — images are accessed via signed URLs only
+-- Create PUBLIC Storage Bucket for Student Enrollment Photos
 INSERT INTO storage.buckets (id, name, public)
-VALUES ('student-photos', 'student-photos', false)
-ON CONFLICT (id) DO UPDATE SET public = false;
+VALUES ('student-photos', 'student-photos', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- Allow the anon key (used by the app) to SELECT (read/download) files
 DROP POLICY IF EXISTS "Anon Read Access for student-photos" ON storage.objects;
@@ -257,5 +257,6 @@ DROP POLICY IF EXISTS "Anon Update Access for student-photos" ON storage.objects
 CREATE POLICY "Anon Update Access for student-photos"
   ON storage.objects FOR UPDATE
   USING (bucket_id = 'student-photos');
+
 
 

@@ -166,7 +166,7 @@ app.get('/api/students', async (req, res) => {
   try {
     const { data, error } = await supabase.from('students').select('*').order('timestamp', { ascending: false });
     if (error) throw error;
-    
+
     // Deduplicate strictly by unique ID or unique Hall Ticket
     const uniqueMap = new Map();
     (data || []).forEach(s => {
@@ -188,41 +188,125 @@ app.get('/api/students', async (req, res) => {
 app.post('/api/students', async (req, res) => {
   try {
     const studentData = req.body;
-    let studentsToInsert = Array.isArray(studentData) ? studentData : [studentData];
-    
-    // Process default fields for each student
-    const records = studentsToInsert.map(s => ({
-      id: s.id || ('STU-' + Math.floor(1000 + Math.random() * 9000)),
-      name: s.name || 'Unknown Cadet',
-      hallTicket: s.hallTicket || ('HT-' + Math.floor(10000 + Math.random() * 90000)),
-      branch: s.branch || 'Computer Science & AI',
-      room: s.room || 'LH-302',
-      seat: s.seat || 'Seat 01',
-      photo: s.photo || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-      status: s.status || 'Verified Safe',
-      detectedDevice: s.detectedDevice || null,
-      detectionConfidence: s.detectionConfidence || null,
-      suspicionScore: s.suspicionScore !== undefined ? s.suspicionScore : 0,
-      suspicionReason: s.suspicionReason || null,
-      timestamp: s.timestamp || new Date().toISOString(),
-      faceConfidence: s.faceConfidence || 98.5,
-      entryDecision: s.entryDecision || 'Allowed',
-      verificationCompleted: s.verificationCompleted !== undefined ? s.verificationCompleted : true,
-      entryAllowed: s.entryAllowed !== undefined ? s.entryAllowed : true,
-      verificationHistory: s.verificationHistory || [
-        { time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), status: 'Biometric Security Enrolled' }
-      ],
-      violationHistory: s.violationHistory || [],
-      snapshot: s.snapshot || s.photo || null
-    }));
+    const studentsToInsert = Array.isArray(studentData)
+      ? studentData
+      : [studentData];
 
-    const { data, error } = await supabase.from('students').insert(records).select();
+    if (studentsToInsert.length === 0) {
+      throw new Error('No student data supplied.');
+    }
+
+    const records = studentsToInsert.map((s) => {
+      const rawEmbedding = s.faceEmbedding || s.face_embedding;
+
+      if (!rawEmbedding) {
+        throw new Error(
+          `No face embedding supplied for ${s.name || s.id || 'student'}.`
+        );
+      }
+
+      let embedding;
+      try {
+        embedding =
+          typeof rawEmbedding === 'string'
+            ? JSON.parse(rawEmbedding)
+            : rawEmbedding;
+      } catch {
+        throw new Error(
+          `Invalid face embedding JSON for ${s.name || s.id || 'student'}.`
+        );
+      }
+
+      if (
+        !Array.isArray(embedding) ||
+        embedding.length !== 512
+      ) {
+        throw new Error(
+          `Face embedding for ${s.name || s.id || 'student'} must contain exactly 512 values.`
+        );
+      }
+
+      embedding = embedding.map(Number);
+
+      if (embedding.some(value => !Number.isFinite(value))) {
+        throw new Error(
+          `Face embedding for ${s.name || s.id || 'student'} contains invalid numeric values.`
+        );
+      }
+
+      const norm = Math.sqrt(
+        embedding.reduce((sum, value) => sum + value * value, 0)
+      );
+
+      if (!Number.isFinite(norm) || norm === 0) {
+        throw new Error(
+          `Invalid zero-length face embedding for ${s.name || s.id || 'student'}.`
+        );
+      }
+
+      // Normalize again immediately before database storage.
+      const normalizedEmbedding = embedding.map(
+        value => value / norm
+      );
+
+      if (!s.photo || !String(s.photo).includes('/storage/v1/object/public/student-photos/')) {
+        throw new Error(
+          `A valid Supabase Storage photo URL is required for ${s.name || s.id || 'student'}.`
+        );
+      }
+
+      return {
+        id: s.id || ('STU-' + Math.floor(1000 + Math.random() * 9000)),
+        name: s.name || 'Unknown Cadet',
+        hallTicket: s.hallTicket || ('HT-' + Math.floor(10000 + Math.random() * 90000)),
+        branch: s.branch || 'Computer Science & AI',
+        room: s.room || 'LH-302',
+        seat: s.seat || 'Seat 01',
+        photo: s.photo,
+        // Supabase/PostgREST accepts a numeric array for a pgvector column.
+        faceEmbedding: normalizedEmbedding,
+        status: s.status || 'Verified Safe',
+        detectedDevice: s.detectedDevice || null,
+        detectionConfidence: s.detectionConfidence || null,
+        suspicionScore: s.suspicionScore !== undefined ? s.suspicionScore : 0,
+        suspicionReason: s.suspicionReason || null,
+        timestamp: s.timestamp || new Date().toISOString(),
+        faceConfidence: s.faceConfidence || 98.5,
+        entryDecision: s.entryDecision || 'Allowed',
+        verificationCompleted: s.verificationCompleted !== undefined ? s.verificationCompleted : true,
+        entryAllowed: s.entryAllowed !== undefined ? s.entryAllowed : true,
+        verificationHistory: s.verificationHistory || [
+          {
+            time: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            }),
+            status: 'Biometric Security Enrolled'
+          }
+        ],
+        violationHistory: s.violationHistory || [],
+        snapshot: s.snapshot || s.photo
+      };
+    });
+
+    const { data, error } = await supabase
+      .from('students')
+      .insert(records)
+      .select();
+
     if (error) throw error;
 
-    res.json({ success: true, count: data ? data.length : records.length, students: data || records });
+    res.json({
+      success: true,
+      count: data?.length || records.length,
+      students: data || records
+    });
   } catch (err) {
-    console.error('Error adding student(s):', err.message);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('Error adding student(s):', err);
+    res.status(500).json({
+      success: false,
+      error: err.message
+    });
   }
 });
 
@@ -370,7 +454,7 @@ app.post('/api/rover/control', async (req, res) => {
             status: 'Active',
             details: 'Physical or manual remote Emergency Stop was executed. Drive motors disengaged immediately.'
           };
-          try { await supabase.from('live_alerts').insert([estopAlert]); } catch (e) {}
+          try { await supabase.from('live_alerts').insert([estopAlert]); } catch (e) { }
           broadcast({ type: 'NEW_ALERT', alert: estopAlert });
           break;
         case 'home':
@@ -391,7 +475,7 @@ app.post('/api/rover/control', async (req, res) => {
         posY: roverStatus.posY,
         motorStatus: roverStatus.motorStatus
       }).eq('id', 1);
-    } catch (e) {}
+    } catch (e) { }
 
     broadcast({ type: 'ROVER_UPDATE', rover: roverStatus });
     res.json({ success: true, rover: roverStatus });
@@ -405,7 +489,7 @@ app.get('/api/alerts', async (req, res) => {
   try {
     const { data, error } = await supabase.from('live_alerts').select('*').order('timestamp', { ascending: false });
     if (error || !data) throw new Error("Fallback alert list");
-    
+
     const uniqueMap = new Map();
     (data || []).forEach(a => {
       const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
@@ -432,8 +516,8 @@ app.post('/api/alerts/:id/resolve', async (req, res) => {
       broadcast({ type: 'ALERT_RESOLVED', alert: data });
       return res.json({ success: true, alert: data });
     }
-  } catch (err) {}
-  
+  } catch (err) { }
+
   broadcast({ type: 'ALERT_RESOLVED', alert: updateFields });
   res.json({ success: true, alert: updateFields });
 });
@@ -453,8 +537,8 @@ app.post('/api/alerts/trigger', async (req, res) => {
 
   try {
     await supabase.from('live_alerts').insert([newAlert]);
-  } catch (err) {}
-  
+  } catch (err) { }
+
   broadcast({ type: 'NEW_ALERT', alert: newAlert });
   res.json({ success: true, alert: newAlert });
 });
@@ -497,7 +581,7 @@ app.post('/api/settings', async (req, res) => {
     const updated = { ...DEFAULT_SYSTEM_SETTINGS, ...req.body };
     try {
       await supabase.from('system_settings').update(req.body).eq('id', 1);
-    } catch (e) {}
+    } catch (e) { }
     res.json({ success: true, settings: updated });
   } catch (err) {
     res.json({ success: true, settings: DEFAULT_SYSTEM_SETTINGS });
@@ -548,12 +632,12 @@ wss.on('connection', async (ws) => {
       }
     });
 
-    ws.send(JSON.stringify({ 
-      type: 'INITIAL_STATE', 
-      rover, 
-      metrics, 
-      alerts: Array.from(uniqueAlertMap.values()), 
-      students: Array.from(uniqueStudentMap.values()) 
+    ws.send(JSON.stringify({
+      type: 'INITIAL_STATE',
+      rover,
+      metrics,
+      alerts: Array.from(uniqueAlertMap.values()),
+      students: Array.from(uniqueStudentMap.values())
     }));
   } catch (err) {
     console.error("Error fetching initial state from Supabase for WebSocket:", err);

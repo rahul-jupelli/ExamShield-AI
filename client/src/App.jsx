@@ -459,40 +459,81 @@ export default function App() {
   };
 
   const handleAddStudent = async (studentOrStudents) => {
+    const inputItems = Array.isArray(studentOrStudents)
+      ? studentOrStudents
+      : [studentOrStudents];
+
     try {
+      // AddStudentView must provide the real FaceNet embedding.
+      for (const student of inputItems) {
+        const rawEmbedding = student.faceEmbedding || student.face_embedding;
+
+        if (!rawEmbedding) {
+          throw new Error(
+            `No face embedding was generated for ${student.name || student.id || 'student'}.`
+          );
+        }
+
+        let embedding;
+        try {
+          embedding =
+            typeof rawEmbedding === 'string'
+              ? JSON.parse(rawEmbedding)
+              : rawEmbedding;
+        } catch {
+          throw new Error(
+            `Invalid face embedding for ${student.name || student.id || 'student'}.`
+          );
+        }
+
+        if (
+          !Array.isArray(embedding) ||
+          embedding.length !== 512 ||
+          embedding.some(value => !Number.isFinite(Number(value)))
+        ) {
+          throw new Error(
+            `Face embedding for ${student.name || student.id || 'student'} must contain exactly 512 valid numbers.`
+          );
+        }
+
+        if (!student.photo || !String(student.photo).includes('student-photos')) {
+          throw new Error(
+            `No valid Supabase Storage photo URL was supplied for ${student.name || student.id || 'student'}.`
+          );
+        }
+      }
+
       const res = await fetch('/api/students', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(studentOrStudents),
+        body: JSON.stringify(inputItems),
       });
-      const data = await res.json();
-      
-      const newItems = Array.isArray(studentOrStudents) ? studentOrStudents : [studentOrStudents];
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to save student to Supabase.');
+      }
+
+      const newItems = data.students || inputItems;
+
       setStudents(prev => {
         const uniqueMap = new Map();
-        [...newItems, ...prev].forEach(s => {
-          const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
+        [...newItems, ...prev].forEach(student => {
+          const key = String(student.id || student.hallTicket || '')
+            .trim()
+            .toLowerCase();
           if (key && !uniqueMap.has(key)) {
-            uniqueMap.set(key, s);
-          } else if (!key) {
-            uniqueMap.set(Math.random().toString(), s);
+            uniqueMap.set(key, student);
           }
         });
         return Array.from(uniqueMap.values());
       });
 
-      // Direct Supabase fallback insert
-      try {
-        const recordsToInsert = Array.isArray(studentOrStudents) ? studentOrStudents : [studentOrStudents];
-        await supabase.from('students').upsert(recordsToInsert, { onConflict: 'id' });
-      } catch (subErr) {
-        console.warn('Direct Supabase insert notice:', subErr.message);
-      }
       return data;
     } catch (err) {
       console.error('Failed to add student via API:', err);
-      const newItems = Array.isArray(studentOrStudents) ? studentOrStudents : [studentOrStudents];
-      setStudents(prev => [...newItems, ...prev]);
+      throw err;
     }
   };
 
