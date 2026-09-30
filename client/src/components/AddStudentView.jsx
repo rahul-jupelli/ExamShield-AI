@@ -178,6 +178,12 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Auto-capture after 3 seconds
+        setTimeout(() => {
+          if (videoRef.current && videoRef.current.srcObject) {
+            capturePhoto();
+          }
+        }, 3000);
       }
     } catch (err) {
       console.warn("Camera access not available, simulating live capture.", err);
