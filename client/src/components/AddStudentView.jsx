@@ -69,7 +69,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
     branch: 'Computer Science & AI',
     room: 'LH-302',
     seat: 'Seat 15',
-    status: 'Verified Safe',
+    status: 'Pending',
     photo: '',
     faceConfidence: 99.2,
     detectedDevice: '',
@@ -278,24 +278,15 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
         faceEmbedding: JSON.stringify(parsedEmbedding),
         status: formData.status,
         detectedDevice:
-          formData.status === 'Device Detected'
+          formData.status === 'Pending'
             ? formData.detectedDevice || 'Mobile Phone RF Signal'
             : null,
-        suspicionReason:
-          formData.status === 'Suspicious'
-            ? formData.suspicionReason || 'Unusual head movement telemetry'
-            : null,
-        suspicionScore:
-          formData.status === 'Suspicious'
-            ? 68
-            : formData.status === 'Device Detected'
-              ? 92
-              : 0,
+        suspicionReason: null,
+        suspicionScore: 0,
         faceConfidence: parseFloat(formData.faceConfidence) || 99.2,
-        entryDecision:
-          formData.status === 'Device Detected' ? 'Denied' : 'Allowed',
-        entryAllowed: formData.status !== 'Device Detected',
-        verificationCompleted: true,
+        entryDecision: 'Pending',
+        entryAllowed: false,
+        verificationCompleted: false,
         timestamp: new Date().toISOString(),
         verificationHistory: [
           {
@@ -306,19 +297,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
             status: 'Biometric Enrolled (512D FaceNet Embedding Generated)',
           },
         ],
-        violationHistory:
-          formData.status === 'Device Detected'
-            ? [
-                {
-                  time: new Date().toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }),
-                  type: 'Device Detected',
-                  detail: 'RF signature match on registration',
-                },
-              ]
-            : [],
+        violationHistory: [],
       };
 
       if (!onAddStudent) {
@@ -363,12 +342,12 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
           branch: branch || 'Computer Science & AI',
           room: room || 'LH-302',
           seat: seat || `Seat ${index + 1}`,
-          status: status || 'Verified Safe',
+          status: status || 'Pending',
           photo: PRESET_AVATARS[index % PRESET_AVATARS.length].url,
           faceConfidence: 98.4,
-          entryDecision: 'Allowed',
-          entryAllowed: true,
-          verificationCompleted: true
+          entryDecision: 'Pending',
+          entryAllowed: false,
+          verificationCompleted: false
         });
       }
     });
@@ -605,46 +584,16 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                   <select
                     value={formData.status}
                     onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
-                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${formData.status === 'Verified Safe'
-                        ? 'text-emerald-400 border-emerald-500/40 bg-emerald-950/20'
-                        : formData.status === 'Suspicious'
-                          ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
-                          : 'text-rose-400 border-rose-500/40 bg-rose-950/20'
+                    className={`w-full px-4 py-3 rounded-2xl text-xs font-semibold border outline-none transition-all cursor-pointer ${formData.status === 'Pending'
+                        ? 'text-amber-400 border-amber-500/40 bg-amber-950/20'
+                        : 'text-emerald-400 border-emerald-500/40 bg-emerald-950/20'
                       }`}
                   >
-                    <option value="Verified Safe" className="bg-slate-900 text-emerald-400">Verified Safe (Green)</option>
-                    <option value="Suspicious" className="bg-slate-900 text-amber-400">Suspicious (Amber Watch)</option>
-                    <option value="Device Detected" className="bg-slate-900 text-rose-400">Device Detected (Red Alert)</option>
+                    <option value="Pending" className="bg-slate-900 text-amber-400">Verification Pending</option>
+                    <option value="Verified" className="bg-slate-900 text-emerald-400">Verified Students</option>
                   </select>
                 </div>
               </div>
-
-              {/* Conditional Alert Detail Fields */}
-              {formData.status === 'Device Detected' && (
-                <div className="p-4 rounded-2xl bg-rose-950/30 border border-rose-500/40 space-y-3 animate-in fade-in">
-                  <label className="block text-xs font-bold text-rose-300">Flagged Device Name / Signature</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Bluetooth Earpiece RF 2.4GHz"
-                    value={formData.detectedDevice}
-                    onChange={(e) => setFormData(prev => ({ ...prev, detectedDevice: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-slate-900 border border-rose-500/30 text-rose-200 outline-none"
-                  />
-                </div>
-              )}
-
-              {formData.status === 'Suspicious' && (
-                <div className="p-4 rounded-2xl bg-amber-950/30 border border-amber-500/40 space-y-3 animate-in fade-in">
-                  <label className="block text-xs font-bold text-amber-300">Suspicion Telemetry Flag Reason</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Frequent lateral gaze towards desk B"
-                    value={formData.suspicionReason}
-                    onChange={(e) => setFormData(prev => ({ ...prev, suspicionReason: e.target.value }))}
-                    className="w-full px-3.5 py-2.5 rounded-xl text-xs bg-slate-900 border border-amber-500/30 text-amber-200 outline-none"
-                  />
-                </div>
-              )}
 
 
               {/* Photo & Biometric Scanner Section */}
@@ -771,11 +720,9 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     <p className="text-[9px] font-mono text-slate-400">STATE UNIVERSITY SURVEILLANCE</p>
                   </div>
                 </div>
-                <span className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider ${formData.status === 'Verified Safe'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                    : formData.status === 'Suspicious'
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                      : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                <span className={`px-2.5 py-1 rounded-full text-[9px] font-mono font-bold uppercase tracking-wider ${formData.status === 'Pending'
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                   }`}>
                   {formData.status}
                 </span>
@@ -886,9 +833,9 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
             <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 font-mono text-xs text-slate-300 space-y-1">
               <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">CSV Template Format:</div>
               <div className="text-emerald-400">Name, HallTicket, Branch, Room, Seat, Status</div>
-              <div>Arjun Mehta, HT-2026-90112, Computer Science & AI, LH-302, Seat 01, Verified Safe</div>
-              <div>Priya Sharma, HT-2026-90113, Cyber Security & Forensics, LH-304, Seat 04, Suspicious</div>
-              <div>Rohan Verma, HT-2026-90114, Robotics & Automation, Main Lab, Seat 12, Verified Safe</div>
+              <div>Arjun Mehta, HT-2026-90112, Computer Science & AI, LH-302, Seat 01, Verified</div>
+              <div>Priya Sharma, HT-2026-90113, Cyber Security & Forensics, LH-304, Seat 04, Pending</div>
+              <div>Rohan Verma, HT-2026-90114, Robotics & Automation, Main Lab, Seat 12, Verified</div>
             </div>
 
             {/* Textarea Input */}
@@ -932,7 +879,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                       </div>
                       <div className="text-right">
                         <span className="text-slate-300 block">{s.room} - {s.seat}</span>
-                        <span className={`text-[10px] ${s.status === 'Verified Safe' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                        <span className={`text-[10px] ${s.status === 'Verified' ? 'text-emerald-400' : 'text-amber-400'}`}>
                           {s.status}
                         </span>
                       </div>
@@ -1006,7 +953,7 @@ export default function AddStudentView({ onAddStudent, onNavigateToDashboard, th
                     ...prev,
                     name: '',
                     hallTicket: '',
-                    status: 'Verified Safe',
+                    status: 'Verified',
                     photo: '',
                     detectedDevice: '',
                     suspicionReason: '',

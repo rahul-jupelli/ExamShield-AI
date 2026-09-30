@@ -742,7 +742,7 @@ export default function App() {
               ...s,
               ...fields,
               entryDecision: dec,
-              status: dec === 'Allowed' ? 'Verified Safe' : 'Device Detected',
+              status: dec === 'Allowed' ? 'Verified' : 'Pending',
               entryAllowed: dec === 'Allowed'
             } : s));
           }}

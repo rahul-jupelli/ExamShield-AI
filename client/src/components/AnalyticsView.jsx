@@ -22,9 +22,8 @@ export default function AnalyticsView({ theme = 'dark' }) {
 
   // 1. Data: Student verified vs flagged
   const verificationData = [
-    { name: 'Cleared Safe', value: 142, color: '#10b981' },
-    { name: 'Suspicious', value: 12, color: '#f59e0b' },
-    { name: 'Device Confirmed', value: 4, color: '#f43f5e' },
+    { name: 'Verified', value: 142, color: '#10b981' },
+    { name: 'Pending', value: 16, color: '#f59e0b' },
   ];
 
   // 2. Data: Device Types Detected

@@ -10,7 +10,7 @@ import GlassCard from './GlassCard';
 
 export default function ReportsView({ students = [], role, operatorName, theme = 'dark' }) {
   const flaggedStudents = useMemo(() => {
-    return students.filter(s => s.status !== 'Verified Safe');
+    return students.filter(s => s.status !== 'Verified');
   }, [students]);
 
   const [selectedStudentId, setSelectedStudentId] = useState(flaggedStudents[0]?.id || students[0]?.id || '');

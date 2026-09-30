@@ -82,7 +82,7 @@ export default function StudentProfileModal({
     const updateFields = {
       entryDecision: decision,
       entryAllowed: decision === 'Allowed',
-      status: decision === 'Allowed' ? 'Verified Safe' : 'Device Detected'
+      status: decision === 'Allowed' ? 'Verified' : 'Pending'
     };
 
     // 1. Optimistic UI update
@@ -207,11 +207,10 @@ export default function StudentProfileModal({
               </div>
 
               <div className={`absolute bottom-3 left-3 right-3 text-center py-1 rounded text-[9px] font-bold font-mono uppercase border tracking-wider ${
-                localStudent.status === 'Device Detected' ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' :
-                localStudent.status === 'Suspicious' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                localStudent.status === 'Pending' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
                 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
               }`}>
-                {localStudent.status}
+                {localStudent.status === 'Pending' ? 'Verification Pending' : 'Verified Student'}
               </div>
             </div>
 
@@ -475,7 +474,7 @@ export default function StudentProfileModal({
             <div className="space-y-6">
               
               {/* Snapshot Display if flagged */}
-              {(student.snapshot || student.status !== 'Verified Safe') && (
+              {(student.snapshot || student.status !== 'Verified') && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider mb-2.5">Flagged Frame Capture</h3>

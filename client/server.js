@@ -265,16 +265,16 @@ app.post('/api/students', async (req, res) => {
         photo: s.photo,
         // Supabase/PostgREST accepts a numeric array for a pgvector column.
         faceEmbedding: normalizedEmbedding,
-        status: s.status || 'Verified Safe',
+        status: s.status || 'Pending',
         detectedDevice: s.detectedDevice || null,
         detectionConfidence: s.detectionConfidence || null,
         suspicionScore: s.suspicionScore !== undefined ? s.suspicionScore : 0,
         suspicionReason: s.suspicionReason || null,
         timestamp: s.timestamp || new Date().toISOString(),
-        faceConfidence: s.faceConfidence || 98.5,
-        entryDecision: s.entryDecision || 'Allowed',
-        verificationCompleted: s.verificationCompleted !== undefined ? s.verificationCompleted : true,
-        entryAllowed: s.entryAllowed !== undefined ? s.entryAllowed : true,
+        faceConfidence: s.faceConfidence || 0,
+        entryDecision: s.entryDecision || 'Pending',
+        verificationCompleted: s.verificationCompleted !== undefined ? s.verificationCompleted : false,
+        entryAllowed: s.entryAllowed !== undefined ? s.entryAllowed : false,
         verificationHistory: s.verificationHistory || [
           {
             time: new Date().toLocaleTimeString([], {
@@ -316,10 +316,10 @@ app.post('/api/students/:id/decision', async (req, res) => {
 
   const updateFields = { entryDecision: decision };
   if (decision === 'Allowed') {
-    updateFields.status = 'Verified Safe';
+    updateFields.status = 'Verified';
     updateFields.entryAllowed = true;
   } else if (decision === 'Denied') {
-    updateFields.status = 'Device Detected';
+    updateFields.status = 'Pending';
     updateFields.entryAllowed = false;
   }
 
