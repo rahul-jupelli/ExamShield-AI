@@ -1,10 +1,30 @@
 import 'dotenv/config';
+import dns from 'dns';
 import express from 'express';
 import path from 'path';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
+
+// Resilient DNS resolution patch: bypasses ISP DNS poisoning/censorship on *.supabase.co (e.g. ACT Fibernet/Airtel/Jio)
+const origLookup = dns.lookup;
+dns.lookup = (hostname, options, callback) => {
+  if (typeof options === 'function') {
+    callback = options;
+    options = {};
+  }
+  if (hostname && (hostname.endsWith('.supabase.co') || hostname === 'supabase.co')) {
+    if (options && options.all) {
+      return callback(null, [
+        { address: '172.64.149.246', family: 4 },
+        { address: '104.18.38.10', family: 4 }
+      ]);
+    }
+    return callback(null, '172.64.149.246', 4);
+  }
+  return origLookup(hostname, options, callback);
+};
 
 // Initialize Express App
 const app = express();
@@ -109,63 +129,116 @@ async function cleanDuplicateDatabaseRecords() {
 cleanDuplicateDatabaseRecords();
 
 // ==========================================
+// Authentication & Role Authorization Middleware
+// ==========================================
+
+// Helper to get authenticated user from Bearer token
+async function authenticateUser(req, res, next) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required. Missing or malformed Bearer authorization token.'
+    });
+  }
+
+  const token = authHeader.split(' ')[1]?.trim();
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required. Empty Bearer token.'
+    });
+  }
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired session token.'
+      });
+    }
+
+    req.user = user;
+    // CRITICAL: Trusted staff roles MUST come strictly from app_metadata.role.
+    // NEVER fall back to user_metadata, request body, query params, or default to Admin!
+    const trustedRole = user.app_metadata?.role;
+    req.userRole = typeof trustedRole === 'string' ? trustedRole.trim() : null;
+    next();
+  } catch (err) {
+    return res.status(401).json({
+      success: false,
+      error: 'Auth token validation failure: ' + err.message
+    });
+  }
+}
+
+// Role authorization middleware
+function authorizeRoles(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required.'
+      });
+    }
+
+    if (!req.userRole) {
+      return res.status(403).json({
+        success: false,
+        error: 'Access denied. Account has no authorized staff role provisioned in app_metadata.'
+      });
+    }
+
+    const userRoleLower = req.userRole.toLowerCase();
+    const isAllowed = allowedRoles.some(r => r.toLowerCase() === userRoleLower);
+
+    if (!isAllowed) {
+      return res.status(403).json({
+        success: false,
+        error: `Access denied. Requires one of: [${allowedRoles.join(', ')}]. Current role: ${req.userRole}`
+      });
+    }
+
+    next();
+  };
+}
+
+// ==========================================
 // API REST Routes (Fetching & Persisting in Supabase)
 // ==========================================
 
-// Deduplication Endpoint
-app.post('/api/cleanup-duplicates', async (req, res) => {
+// Deduplication Endpoint (Admin, Exam Controller only)
+app.post('/api/cleanup-duplicates', authenticateUser, authorizeRoles('Admin', 'Exam Controller'), async (req, res) => {
   await cleanDuplicateDatabaseRecords();
   res.json({ success: true, message: 'Database deduplication check completed.' });
 });
 
-// Health Check - Supabase connectivity
-app.get('/api/health', async (req, res) => {
-  try {
-    const tables = ['students', 'live_alerts', 'rover_status', 'system_metrics', 'ai_detection_logs', 'system_settings'];
-    const results = {};
-
-    for (const table of tables) {
-      try {
-        const { count, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
-        results[table] = error ? { status: 'ERROR', message: error.message } : { status: 'OK', rows: count };
-      } catch (tableErr) {
-        results[table] = { status: 'ERROR', message: tableErr.message };
-      }
-    }
-
-    const allOk = Object.values(results).every(r => r.status === 'OK');
-    res.json({
-      supabase: allOk ? 'connected' : 'partial',
-      url: supabaseUrl,
-      tables: results
-    });
-  } catch (err) {
-    res.status(500).json({ supabase: 'error', message: err.message });
-  }
+// Safe Health Check - Basic service indicator (No sensitive row counts leaked to public)
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'ok',
+    service: 'ExamShield Full-Stack Server',
+    timestamp: new Date().toISOString()
+  });
 });
 
-// Login endpoint
+// Legacy Mock Login endpoint disabled (All authentication must occur via Supabase Auth)
 app.post('/api/auth/login', (req, res) => {
-  const { username, password, role } = req.body;
-  if (username && role) {
-    const fullName = username.split('_').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
-    res.json({
-      success: true,
-      username,
-      role,
-      fullName: fullName || 'Authorized Officer',
-      token: 'jwt-examshield-token-' + role.toLowerCase()
-    });
-  } else {
-    res.status(400).json({ success: false, error: 'Username and Role are required' });
-  }
+  res.status(400).json({
+    success: false,
+    error: 'Direct mock login is disabled. All authentication must occur via Supabase Auth.'
+  });
 });
 
-// Students (Deduplicated response)
-app.get('/api/students', async (req, res) => {
+// Students (Deduplicated response - Staff view only)
+app.get('/api/students', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('students').select('*').order('timestamp', { ascending: false });
-    if (error) throw error;
+    if (error) {
+      console.warn('Supabase fetch notice for /api/students:', error.message);
+      return res.json([]);
+    }
 
     // Deduplicate strictly by unique ID or unique Hall Ticket
     const uniqueMap = new Map();
@@ -180,12 +253,13 @@ app.get('/api/students', async (req, res) => {
 
     res.json(Array.from(uniqueMap.values()));
   } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
+    console.warn('Error fetching /api/students:', err.message);
+    res.json([]);
   }
 });
 
-// Add New Student(s) to Supabase
-app.post('/api/students', async (req, res) => {
+// Add New Student(s) to Supabase (Authorized staff only: Admin, Exam Controller, Operator)
+app.post('/api/students', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
   try {
     const studentData = req.body;
     const studentsToInsert = Array.isArray(studentData)
@@ -310,7 +384,8 @@ app.post('/api/students', async (req, res) => {
   }
 });
 
-app.post('/api/students/:id/decision', async (req, res) => {
+// Student Decision (Allowed/Denied) - Admin, Exam Controller, Operator only
+app.post('/api/students/:id/decision', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
   const { id } = req.params;
   const { decision } = req.body;
 
@@ -331,6 +406,158 @@ app.post('/api/students/:id/decision', async (req, res) => {
     res.status(500).json({ success: false, error: err.message });
   }
 });
+
+// ==========================================
+// Exam Management & Surveillance Endpoints
+// ==========================================
+
+// Get all exams (Available to Admin, Exam Controller, Operator, Viewer)
+app.get('/api/exams', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
+  try {
+    const { data, error } = await supabase.from('exams').select('*').order('start_time', { ascending: true });
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Create exam with student assignments (Admin, Exam Controller only)
+app.post('/api/exams', authenticateUser, authorizeRoles('Admin', 'Exam Controller'), async (req, res) => {
+  try {
+    const { exam, student_ids } = req.body;
+    if (!exam || !exam.exam_name || !exam.start_time || !exam.end_time) {
+      return res.status(400).json({ success: false, error: 'Missing required exam fields.' });
+    }
+
+    const { data: createdExam, error: examErr } = await supabase
+      .from('exams')
+      .insert([exam])
+      .select()
+      .single();
+
+    if (examErr) throw examErr;
+
+    if (Array.isArray(student_ids) && student_ids.length > 0) {
+      const records = student_ids.map(sId => ({
+        exam_id: createdExam.id,
+        student_id: sId,
+        verification_status: 'unverified'
+      }));
+      await supabase.from('exam_students').insert(records);
+    }
+
+    res.json({ success: true, exam: createdExam });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get assigned students for exam (Admin, Exam Controller, Operator, Viewer)
+app.get('/api/exams/:id/students', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('exam_students')
+      .select('*, student:students(*)')
+      .eq('exam_id', id);
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update per-exam student verification status (Admin, Exam Controller, Operator)
+app.put('/api/exams/:id/students/:studentId', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
+  try {
+    const { id, studentId } = req.params;
+    const { verification_status } = req.body;
+
+    const verified_at = verification_status === 'verified' ? new Date().toISOString() : null;
+    const { data, error } = await supabase
+      .from('exam_students')
+      .update({ verification_status, verified_at })
+      .eq('exam_id', id)
+      .eq('student_id', studentId)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get incidents for an exam (Admin, Exam Controller, Operator, Viewer)
+app.get('/api/exams/:id/incidents', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { data, error } = await supabase
+      .from('device_incidents')
+      .select('*, student:students(*)')
+      .eq('exam_id', id)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Get all incidents across exams (Admin, Exam Controller, Operator)
+app.get('/api/incidents', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('device_incidents')
+      .select('*, exam:exams(*), student:students(*)')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Update incident review status (Admin, Exam Controller, Operator)
+app.put('/api/incidents/:id/review', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { review_status, student_id, reviewed_by } = req.body;
+
+    const { data, error } = await supabase
+      .from('device_incidents')
+      .update({
+        review_status,
+        student_id: student_id || null,
+        reviewed_by: reviewed_by || 'Admin Officer',
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', id)
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Rover inference node health check
+app.get('/api/rover/inference-node', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), (req, res) => {
+  // Clear indicator for future Raspberry Pi 4 integration
+  res.json({
+    connected: false,
+    hardware: 'Raspberry Pi 4 Model B (Inference System)',
+    endpoint: '/api/rover/inference-stream',
+    status: 'Standby / Waiting for hardware socket connection',
+    timestamp: new Date().toISOString()
+  });
+});
+
 
 // Default Fallback Data Structure for Resilient Offline / Failed DB Operations
 const DEFAULT_ROVER_STATUS = {
@@ -385,8 +612,8 @@ const DEFAULT_SYSTEM_SETTINGS = {
   ]
 };
 
-// Rover status
-app.get('/api/rover', async (req, res) => {
+// Rover status (Admin, Exam Controller, Operator, Viewer)
+app.get('/api/rover', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('rover_status').select('*').eq('id', 1).single();
     if (error || !data) {
@@ -399,7 +626,8 @@ app.get('/api/rover', async (req, res) => {
   }
 });
 
-app.post('/api/rover/control', async (req, res) => {
+// Rover Control (Admin, Exam Controller, Operator only)
+app.post('/api/rover/control', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
   const { command } = req.body;
 
   try {
@@ -484,8 +712,8 @@ app.post('/api/rover/control', async (req, res) => {
   }
 });
 
-// Alerts (Deduplicated response)
-app.get('/api/alerts', async (req, res) => {
+// Alerts (Admin, Exam Controller, Operator, Viewer)
+app.get('/api/alerts', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('live_alerts').select('*').order('timestamp', { ascending: false });
     if (error || !data) throw new Error("Fallback alert list");
@@ -504,7 +732,8 @@ app.get('/api/alerts', async (req, res) => {
   }
 });
 
-app.post('/api/alerts/:id/resolve', async (req, res) => {
+// Resolve Alert (Admin, Exam Controller, Operator only)
+app.post('/api/alerts/:id/resolve', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
   const { id } = req.params;
   const { status, action } = req.body;
 
@@ -522,7 +751,8 @@ app.post('/api/alerts/:id/resolve', async (req, res) => {
   res.json({ success: true, alert: updateFields });
 });
 
-app.post('/api/alerts/trigger', async (req, res) => {
+// Trigger Alert (Admin, Exam Controller, Operator only)
+app.post('/api/alerts/trigger', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
   const { title, priority, location, details } = req.body;
   const newAlert = {
     id: 'custom_' + Date.now(),
@@ -543,8 +773,8 @@ app.post('/api/alerts/trigger', async (req, res) => {
   res.json({ success: true, alert: newAlert });
 });
 
-// System Metrics
-app.get('/api/metrics', async (req, res) => {
+// System Metrics (Admin, Exam Controller, Operator, Viewer)
+app.get('/api/metrics', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('system_metrics').select('*').eq('id', 1).single();
     if (error || !data) return res.json(DEFAULT_SYSTEM_METRICS);
@@ -554,8 +784,8 @@ app.get('/api/metrics', async (req, res) => {
   }
 });
 
-// Logs
-app.get('/api/logs', async (req, res) => {
+// Logs (Admin, Exam Controller, Operator, Viewer)
+app.get('/api/logs', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('ai_detection_logs').select('*').order('timestamp', { ascending: false });
     if (error || !data) return res.json([]);
@@ -565,8 +795,8 @@ app.get('/api/logs', async (req, res) => {
   }
 });
 
-// Settings
-app.get('/api/settings', async (req, res) => {
+// Settings (GET - Admin, Exam Controller, Operator, Viewer)
+app.get('/api/settings', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), async (req, res) => {
   try {
     const { data, error } = await supabase.from('system_settings').select('*').eq('id', 1).single();
     if (error || !data) return res.json(DEFAULT_SYSTEM_SETTINGS);
@@ -576,7 +806,8 @@ app.get('/api/settings', async (req, res) => {
   }
 });
 
-app.post('/api/settings', async (req, res) => {
+// Settings (POST - Admin, Exam Controller only)
+app.post('/api/settings', authenticateUser, authorizeRoles('Admin', 'Exam Controller'), async (req, res) => {
   try {
     const updated = { ...DEFAULT_SYSTEM_SETTINGS, ...req.body };
     try {
@@ -591,7 +822,7 @@ app.post('/api/settings', async (req, res) => {
 
 
 // ==========================================
-// Real-time Event Simulation via WebSockets
+// Real-time Event Simulation via WebSockets (Authenticated Staff Only)
 // ==========================================
 
 const server = http.createServer(app);
@@ -600,61 +831,114 @@ const wss = new WebSocketServer({ noServer: true });
 const clients = new Set();
 
 wss.on('connection', async (ws) => {
-  clients.add(ws);
+  ws.authenticated = false;
+  ws.user = null;
+  ws.userRole = null;
 
-  try {
-    const [
-      { data: rover },
-      { data: metrics },
-      { data: alerts },
-      { data: students }
-    ] = await Promise.all([
-      supabase.from('rover_status').select('*').eq('id', 1).single(),
-      supabase.from('system_metrics').select('*').eq('id', 1).single(),
-      supabase.from('live_alerts').select('*').order('timestamp', { ascending: false }),
-      supabase.from('students').select('*').order('id')
-    ]);
+  // Enforce staff authentication timeout (7 seconds)
+  const authTimeout = setTimeout(() => {
+    if (!ws.authenticated) {
+      try {
+        ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Authentication timeout. Authorized staff credentials required.' }));
+        ws.close(4401, 'Authentication timeout');
+      } catch (e) {}
+    }
+  }, 7000);
 
-    // Deduplicate students before broadcasting initial state over WebSocket
-    const uniqueStudentMap = new Map();
-    (students || []).forEach(s => {
-      const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
-      if (!uniqueStudentMap.has(key)) {
-        uniqueStudentMap.set(key, s);
-      }
-    });
-
-    const uniqueAlertMap = new Map();
-    (alerts || []).forEach(a => {
-      const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
-      if (!uniqueAlertMap.has(key)) {
-        uniqueAlertMap.set(key, a);
-      }
-    });
-
-    ws.send(JSON.stringify({
-      type: 'INITIAL_STATE',
-      rover,
-      metrics,
-      alerts: Array.from(uniqueAlertMap.values()),
-      students: Array.from(uniqueStudentMap.values())
-    }));
-  } catch (err) {
-    console.error("Error fetching initial state from Supabase for WebSocket:", err);
-  }
-
-  ws.on('message', (message) => {
+  ws.on('message', async (message) => {
     try {
       const data = JSON.parse(message);
+
+      if (data.type === 'AUTH') {
+        const token = data.token?.trim();
+        if (!token) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Missing access token in AUTH packet.' }));
+          ws.close(4401, 'Unauthorized');
+          return;
+        }
+
+        try {
+          const { data: { user }, error } = await supabase.auth.getUser(token);
+          if (error || !user) {
+            ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Invalid or expired session token.' }));
+            ws.close(4401, 'Unauthorized');
+            return;
+          }
+
+          const trustedRole = user.app_metadata?.role;
+          const ALLOWED_STAFF_ROLES = ['Admin', 'Exam Controller', 'Operator', 'Viewer'];
+          if (!trustedRole || !ALLOWED_STAFF_ROLES.includes(trustedRole)) {
+            ws.send(JSON.stringify({
+              type: 'AUTH_ERROR',
+              error: 'Access denied: account lacks an authorized staff role.'
+            }));
+            ws.close(4403, 'Forbidden');
+            return;
+          }
+
+          clearTimeout(authTimeout);
+          ws.authenticated = true;
+          ws.user = user;
+          ws.userRole = trustedRole;
+          clients.add(ws);
+
+          ws.send(JSON.stringify({ type: 'AUTH_SUCCESS', role: trustedRole }));
+
+          // Deliver initial telemetry snapshot to authorized staff client
+          const [roverRes, metricsRes, alertsRes, studentsRes] = await Promise.allSettled([
+            supabase.from('rover_status').select('*').eq('id', 1).single(),
+            supabase.from('system_metrics').select('*').eq('id', 1).single(),
+            supabase.from('live_alerts').select('*').order('timestamp', { ascending: false }),
+            supabase.from('students').select('*').order('id')
+          ]);
+
+          const rover = (roverRes.status === 'fulfilled' && !roverRes.value.error && roverRes.value.data) || DEFAULT_ROVER_STATUS;
+          const metrics = (metricsRes.status === 'fulfilled' && !metricsRes.value.error && metricsRes.value.data) || DEFAULT_SYSTEM_METRICS;
+          const alerts = (alertsRes.status === 'fulfilled' && !alertsRes.value.error && alertsRes.value.data) || [];
+          const students = (studentsRes.status === 'fulfilled' && !studentsRes.value.error && studentsRes.value.data) || [];
+
+          // Deduplicate students
+          const uniqueStudentMap = new Map();
+          (students || []).forEach(s => {
+            const key = (s.hallTicket || s.name || s.id || '').trim().toLowerCase();
+            if (!uniqueStudentMap.has(key)) {
+              uniqueStudentMap.set(key, s);
+            }
+          });
+
+          const uniqueAlertMap = new Map();
+          (alerts || []).forEach(a => {
+            const key = (a.id || (a.title + '_' + a.location)).trim().toLowerCase();
+            if (!uniqueAlertMap.has(key)) {
+              uniqueAlertMap.set(key, a);
+            }
+          });
+
+          ws.send(JSON.stringify({
+            type: 'INITIAL_STATE',
+            rover,
+            metrics,
+            alerts: Array.from(uniqueAlertMap.values()),
+            students: Array.from(uniqueStudentMap.values())
+          }));
+        } catch (err) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Auth error: ' + err.message }));
+          ws.close(4401, 'Unauthorized');
+        }
+        return;
+      }
+
       if (data.type === 'PING') {
         ws.send(JSON.stringify({ type: 'PONG' }));
+        return;
       }
     } catch (e) {
-      // Ignore
+      // Ignore malformed packets
     }
   });
 
   ws.on('close', () => {
+    clearTimeout(authTimeout);
     clients.delete(ws);
   });
 });
@@ -672,7 +956,7 @@ server.on('upgrade', (request, socket, head) => {
 function broadcast(data) {
   const msg = JSON.stringify(data);
   for (const client of clients) {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.authenticated && client.readyState === WebSocket.OPEN) {
       client.send(msg);
     }
   }

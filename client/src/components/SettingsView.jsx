@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import GlassCard from './GlassCard';
 
-export default function SettingsView({ settings = {}, onSaveSettings, theme = 'dark', onToggleTheme }) {
+export default function SettingsView({ settings = {}, role, onSaveSettings, theme = 'dark', onToggleTheme }) {
   const [aiThreshold, setAiThreshold] = useState(settings.aiThreshold ?? 85);
   const [suspicionThreshold, setSuspicionThreshold] = useState(settings.suspicionThreshold ?? 70);
   const [newHall, setNewHall] = useState('');
@@ -34,9 +34,11 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
 
   const [showSavedToast, setShowSavedToast] = useState(false);
   const isLight = theme === 'light';
+  const canEdit = ['Admin', 'Exam Controller'].includes(role);
 
   const handleAddHall = (e) => {
     e.preventDefault();
+    if (!canEdit) return;
     if (newHall.trim() && !halls.includes(newHall.trim())) {
       setHalls([...halls, newHall.trim()]);
       setNewHall('');
@@ -44,10 +46,15 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
   };
 
   const handleRemoveHall = (hallToRemove) => {
+    if (!canEdit) return;
     setHalls(halls.filter(h => h !== hallToRemove));
   };
 
   const handleSave = () => {
+    if (!canEdit) {
+      console.warn('Unauthorized settings commit attempt blocked.');
+      return;
+    }
     const updated = {
       examHalls: halls,
       aiThreshold,
@@ -73,22 +80,33 @@ export default function SettingsView({ settings = {}, onSaveSettings, theme = 'd
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className={`text-2xl sm:text-3xl font-extrabold flex items-center gap-2.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
-            System Configuration Deck
-            <Settings className="h-6 w-6 text-blue-500" />
-          </h1>
+          <div className="flex items-center gap-3">
+            <h1 className={`text-2xl sm:text-3xl font-extrabold flex items-center gap-2.5 ${isLight ? 'text-slate-900' : 'text-white'}`}>
+              System Configuration Deck
+              <Settings className="h-6 w-6 text-blue-500" />
+            </h1>
+            {!canEdit && (
+              <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                READ-ONLY
+              </span>
+            )}
+          </div>
           <p className={`text-xs sm:text-sm mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-            Manage artificial intelligence detection bounds, exam room registries, and proctor dispatch alerts.
+            {canEdit 
+              ? 'Manage artificial intelligence detection bounds, exam room registries, and proctor dispatch alerts.'
+              : `Configuration adjustments require Admin or Exam Controller privileges. Active role: ${role || 'Unassigned'}.`}
           </p>
         </div>
 
-        <button
-          onClick={handleSave}
-          className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm active:translate-y-px transition-all cursor-pointer"
-        >
-          <Save className="h-4 w-4" />
-          <span>COMMIT ADJUSTMENTS</span>
-        </button>
+        {canEdit && (
+          <button
+            onClick={handleSave}
+            className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-sm active:translate-y-px transition-all cursor-pointer"
+          >
+            <Save className="h-4 w-4" />
+            <span>COMMIT ADJUSTMENTS</span>
+          </button>
+        )}
       </div>
 
       {showSavedToast && (

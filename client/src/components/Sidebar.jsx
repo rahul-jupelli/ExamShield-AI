@@ -17,7 +17,9 @@ import {
   Moon,
   Home,
   UserCheck,
-  UserPlus
+  UserPlus,
+  Calendar,
+  ShieldAlert
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -36,6 +38,8 @@ export default function Sidebar({
 
   const MENU_ITEMS = [
     { id: 'dashboard', label: 'Live Monitoring', icon: LayoutDashboard, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
+    { id: 'exam-management', label: 'Exam Management', icon: Calendar, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
+    { id: 'incident-review', label: 'Incident Review', icon: ShieldAlert, roles: ['Admin', 'Exam Controller', 'Operator'] },
     { id: 'add-student', label: 'Student Enrollment', icon: UserPlus, roles: ['Admin', 'Exam Controller', 'Operator'] },
     { id: 'rover', label: 'Rover Surveillance', icon: Cpu, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
     { id: 'alerts', label: 'Active Alerts', icon: AlertTriangle, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'], badgeCount: true },
@@ -47,9 +51,15 @@ export default function Sidebar({
   ];
 
   // Filters menu items based on active session's role
-  const allowedMenuItems = MENU_ITEMS.filter(item => item.roles.includes(session.role));
+  const userRole = session?.role || '';
+  const allowedMenuItems = MENU_ITEMS.filter(item => item.roles.includes(userRole));
 
   const handleTabClick = (tabId) => {
+    const targetItem = MENU_ITEMS.find((item) => item.id === tabId);
+    if (!targetItem || !targetItem.roles.includes(userRole)) {
+      console.warn(`[Sidebar] Navigation to "${tabId}" denied for role "${userRole || 'Unassigned'}".`);
+      return;
+    }
     setActiveTab(tabId);
     setMobileOpen(false);
   };
@@ -163,14 +173,16 @@ export default function Sidebar({
         }`}>
           <div className="flex items-center gap-2.5 overflow-hidden min-w-0">
             <div className="h-8 w-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-xs text-white shadow-[0_0_12px_rgba(37,99,235,0.5)] flex-shrink-0">
-              {session.fullName ? session.fullName.charAt(0) : 'U'}
+              {session?.fullName ? session.fullName.charAt(0).toUpperCase() : 'U'}
             </div>
             <div className="overflow-hidden min-w-0 flex-1">
-              <span className={`block text-xs font-semibold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>{session.fullName}</span>
+              <span className={`block text-xs font-semibold truncate ${isLight ? 'text-slate-900' : 'text-white'}`}>
+                {session?.fullName || 'Operator'}
+              </span>
               <span className={`inline-block text-[9px] font-mono font-bold px-1.5 py-0.2 rounded mt-0.5 uppercase tracking-wide border ${
                 isLight ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-blue-500/10 border-blue-500/20 text-blue-400'
               }`}>
-                {session.role}
+                {session?.role || 'Unassigned Role'}
               </span>
             </div>
           </div>

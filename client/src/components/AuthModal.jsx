@@ -93,7 +93,6 @@ export default function AuthModal({ initialMode = 'signin', onClose, onLoginSucc
         options: {
           data: {
             full_name: fullName.trim(),
-            role: 'Admin',
           },
         },
       });
@@ -107,7 +106,7 @@ export default function AuthModal({ initialMode = 'signin', onClose, onLoginSucc
         onLoginSuccess(data.user);
         onClose();
       } else {
-        setSuccessMessage("Admin account created! Please check your email or sign in.");
+        setSuccessMessage("Account created successfully! Please check your email or sign in.");
         setTimeout(() => switchMode('signin'), 2000);
       }
     } catch (err) {
@@ -202,12 +201,12 @@ export default function AuthModal({ initialMode = 'signin', onClose, onLoginSucc
         <div className="mb-4">
           <h3 className="text-lg font-bold text-white tracking-tight">
             {mode === 'signin' && 'Sign In to Command Center'}
-            {mode === 'signup' && 'Register Admin Account'}
+            {mode === 'signup' && 'Register Staff Account'}
             {mode === 'forgot' && 'Reset Password'}
           </h3>
           <p className="text-xs text-slate-400 mt-0.5">
-            {mode === 'signin' && 'Enter your admin credentials to access live telemetry.'}
-            {mode === 'signup' && 'Create an administrator account for your exam hall.'}
+            {mode === 'signin' && 'Enter your authorized staff credentials to access live telemetry.'}
+            {mode === 'signup' && 'Create an account. Authorized staff roles must be provisioned by an administrator.'}
             {mode === 'forgot' && 'Enter your email address to receive a recovery link.'}
           </p>
         </div>

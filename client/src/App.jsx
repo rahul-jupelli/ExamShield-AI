@@ -4,9 +4,30 @@ import {
   X,
   WifiOff,
   ShieldAlert,
-  Volume2
+  Volume2,
+  Shield,
+  Lock,
+  LogOut,
+  Home,
+  UserPlus
 } from 'lucide-react';
 import { supabase, clearCorruptedSupabaseStorage } from "./lib/supabase";
+import { useAuth } from './context/AuthContext';
+
+// Central Tab-Level Staff Access Policy Whitelist
+const TAB_PERMISSIONS = {
+  'dashboard': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
+  'exam-management': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
+  'rover': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
+  'alerts': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
+  'analytics': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
+  'health': ['Admin', 'Exam Controller', 'Viewer'],
+  'history': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
+  'incident-review': ['Admin', 'Exam Controller', 'Operator'],
+  'add-student': ['Admin', 'Exam Controller', 'Operator'],
+  'reports': ['Admin', 'Exam Controller', 'Operator'],
+  'settings': ['Admin', 'Exam Controller'],
+};
 
 
 // Importing Custom Subviews
@@ -23,20 +44,17 @@ import HealthView from './components/HealthView';
 import HistoryView from './components/HistoryView';
 import SettingsView from './components/SettingsView';
 import AddStudentView from './components/AddStudentView';
+import ExamManagementView from './components/ExamManagementView';
+import IncidentReviewView from './components/IncidentReviewView';
 import { fetchStudentPhotoFromSupabase } from './services/storageService';
+import { apiFetch } from './services/apiClient';
 
 export default function App() {
-  // 1. Session state (auth)
-  // >>> AUTH TEMPORARILY DISABLED — session initialized with mock admin <<<
-  const [session, setSession] = useState({
-    role: 'Admin',
-    fullName: 'Dev Admin',
-    email: 'dev@examshield.ai',
-  });
-  const [authLoading, setAuthLoading] = useState(false);
+  // 1. Authoritative Auth Session via AuthContext
+  const { user: session, loading: authLoading, signOut } = useAuth();
 
-  // View Mode state: 'landing' | 'dashboard'
-  const [viewMode, setViewMode] = useState('dashboard');
+  // View Mode state: 'landing' | 'dashboard' | 'registration'
+  const [viewMode, setViewMode] = useState('landing');
 
   // Theme State: 'dark' | 'light'
   const [theme, setTheme] = useState(() => localStorage.getItem('examshield_theme') || 'dark');
@@ -60,58 +78,30 @@ export default function App() {
     }
   }, [theme]);
 
-  const formatUserData = (user) => {
-    if (!user) return null;
-    return {
-      ...user,
-      role: "Admin",
-      fullName: user.user_metadata?.full_name || user.email || "Admin Operator",
-    };
-  };
-
+  // Sync viewMode with session transitions: unauthenticated and non-staff users never stay on staff dashboard
   useEffect(() => {
-    async function getSession() {
-      try {
-        const { data, error } = await supabase.auth.getSession();
-        if (error) {
-          console.warn("Session retrieval notice:", error.message);
-          clearCorruptedSupabaseStorage();
-        } else if (data?.session?.user) {
-          setSession(formatUserData(data.session.user));
-        }
-      } catch (err) {
-        console.warn("Session restoration notice:", err);
-        clearCorruptedSupabaseStorage();
-      } finally {
-        setAuthLoading(false);
-      }
+    if (session?.isStaff) {
+      const canRegister = ['Admin', 'Exam Controller', 'Operator'].includes(session.role);
+      setViewMode(prev => (prev === 'registration' && canRegister) ? 'registration' : 'dashboard');
+    } else if (session) {
+      // Authenticated but no authorized staff role assigned in app_metadata
+      setViewMode('unauthorized');
+    } else {
+      // Unauthenticated visitor
+      setViewMode('landing');
     }
-
-    getSession();
-
-    let subscription;
-    try {
-      const authListener = supabase.auth.onAuthStateChange((_event, currentSession) => {
-        if (currentSession?.user) {
-          setSession(formatUserData(currentSession.user));
-        }
-        setAuthLoading(false);
-      });
-      subscription = authListener.data?.subscription;
-    } catch (e) {
-      console.warn("Auth listener notice:", e);
-    }
-
-    return () => {
-      if (subscription) subscription.unsubscribe();
-    };
-  }, []);
-
-
+  }, [session]);
 
   // 2. Navigation State
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Keep activeTab within permitted tabs if user role changes
+  useEffect(() => {
+    if (session?.role && TAB_PERMISSIONS[activeTab] && !TAB_PERMISSIONS[activeTab].includes(session.role)) {
+      setActiveTab('dashboard');
+    }
+  }, [session?.role, activeTab]);
 
   // 3. Core Live Telemetry variables
   const [students, setStudents] = useState([]);
@@ -242,17 +232,47 @@ export default function App() {
   const hydrateAllStates = useCallback(async () => {
     try {
       const [studentsRes, alertsRes, roverRes, metricsRes, logsRes, settingsRes] = await Promise.all([
-        fetch('/api/students').then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch('/api/alerts').then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch('/api/rover').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/metrics').then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch('/api/logs').then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch('/api/settings').then(r => r.ok ? r.json() : null).catch(() => null),
+        apiFetch('/api/students').then(r => r.ok ? r.json() : []).catch(err => {
+          console.warn('[App] Students fetch notice:', err.message);
+          return [];
+        }),
+        apiFetch('/api/alerts').then(r => r.ok ? r.json() : []).catch(err => {
+          console.warn('[App] Alerts fetch notice:', err.message);
+          return [];
+        }),
+        apiFetch('/api/rover').then(r => r.ok ? r.json() : null).catch(err => {
+          console.warn('[App] Rover fetch notice:', err.message);
+          return null;
+        }),
+        apiFetch('/api/metrics').then(r => r.ok ? r.json() : null).catch(err => {
+          console.warn('[App] Metrics fetch notice:', err.message);
+          return null;
+        }),
+        apiFetch('/api/logs').then(r => r.ok ? r.json() : []).catch(err => {
+          console.warn('[App] Logs fetch notice:', err.message);
+          return [];
+        }),
+        apiFetch('/api/settings').then(r => r.ok ? r.json() : null).catch(err => {
+          console.warn('[App] Settings fetch notice:', err.message);
+          return null;
+        }),
       ]);
 
-      if (Array.isArray(studentsRes) && studentsRes.length > 0) {
+      let resolvedStudents = Array.isArray(studentsRes) && studentsRes.length > 0 ? studentsRes : [];
+      if (resolvedStudents.length === 0) {
+        try {
+          const { data: dbStudents } = await supabase.from('students').select('*').order('timestamp', { ascending: false });
+          if (Array.isArray(dbStudents) && dbStudents.length > 0) {
+            resolvedStudents = dbStudents;
+          }
+        } catch (dbErr) {
+          console.warn('[App] Direct Supabase students fallback fetch notice:', dbErr);
+        }
+      }
+
+      if (resolvedStudents.length > 0) {
         const uniqueStudentsMap = new Map();
-        studentsRes.forEach(s => {
+        resolvedStudents.forEach(s => {
           const key = String(s.id || s.hallTicket || '').trim().toLowerCase();
           if (key && !uniqueStudentsMap.has(key)) {
             uniqueStudentsMap.set(key, s);
@@ -294,16 +314,16 @@ export default function App() {
   }, [resolveStudentBucketPhotos]);
 
 
-  // Hydrate once logged in
+  // Hydrate once logged in as authorized staff or viewing dashboard
   useEffect(() => {
-    if (session) {
+    if (session?.isStaff || viewMode === 'dashboard') {
       hydrateAllStates();
     }
-  }, [session, hydrateAllStates]);
+  }, [session, viewMode, hydrateAllStates]);
 
-  // 8. WebSocket Telemetry Client
+  // 8. WebSocket Telemetry Client (Authenticated Staff Only)
   useEffect(() => {
-    if (!session) return;
+    if (!session?.isStaff) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -314,14 +334,33 @@ export default function App() {
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
-      socket.onopen = () => {
-        setWsConnected(true);
-        console.log('ExamShield Telemetry Link established.');
+      socket.onopen = async () => {
+        try {
+          const { data } = await supabase.auth.getSession();
+          const token = data?.session?.access_token;
+          if (token) {
+            socket.send(JSON.stringify({ type: 'AUTH', token }));
+          }
+        } catch (e) {
+          console.warn('[WS] Token transmit error:', e);
+        }
       };
 
       socket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+
+          if (data.type === 'AUTH_SUCCESS') {
+            setWsConnected(true);
+            console.log('ExamShield Telemetry Link established & authenticated.');
+            return;
+          }
+
+          if (data.type === 'AUTH_ERROR') {
+            console.warn('[WS] Telemetry Link Auth Denied:', data.error);
+            setWsConnected(false);
+            return;
+          }
 
           switch (data.type) {
             case 'INITIAL_STATE':
@@ -377,12 +416,10 @@ export default function App() {
 
     connectWS();
 
-    // Fallback Polling every 6s
+    // Resilient periodic sync to ensure live monitoring is always up to date
     const pollingInterval = setInterval(() => {
-      if (!wsConnectedRef.current) {
-        hydrateAllStates();
-      }
-    }, 6000);
+      hydrateAllStates();
+    }, 8000);
 
     return () => {
       if (socketRef.current) {
@@ -395,10 +432,13 @@ export default function App() {
 
   // 9. Interactive Post Command Handlers
   const handleSendCommand = async (command) => {
+    if (!['Admin', 'Exam Controller', 'Operator'].includes(session?.role)) {
+      console.warn('Rover control blocked: operator or admin authorization required.');
+      return;
+    }
     try {
-      const res = await fetch('/api/rover/control', {
+      const res = await apiFetch('/api/rover/control', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command }),
       });
       const data = await res.json();
@@ -411,10 +451,13 @@ export default function App() {
   };
 
   const handleResolveAlert = async (alertId, status, action) => {
+    if (!['Admin', 'Exam Controller', 'Operator'].includes(session?.role)) {
+      console.warn('Alert resolution blocked: operator or admin authorization required.');
+      return;
+    }
     try {
-      const res = await fetch(`/api/alerts/${alertId}/resolve`, {
+      const res = await apiFetch(`/api/alerts/${alertId}/resolve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ status, action }),
       });
       const data = await res.json();
@@ -427,10 +470,13 @@ export default function App() {
   };
 
   const handleTriggerMockAlert = async (alertPayload) => {
+    if (!['Admin', 'Exam Controller', 'Operator'].includes(session?.role)) {
+      console.warn('Alert trigger blocked: operator or admin authorization required.');
+      return;
+    }
     try {
-      const res = await fetch('/api/alerts/trigger', {
+      const res = await apiFetch('/api/alerts/trigger', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(alertPayload),
       });
       const data = await res.json();
@@ -443,10 +489,13 @@ export default function App() {
   };
 
   const handleSaveSettings = async (updatedSettings) => {
+    if (!['Admin', 'Exam Controller'].includes(session?.role)) {
+      console.warn('Settings save blocked: exam controller or admin authorization required.');
+      return;
+    }
     try {
-      const res = await fetch('/api/settings', {
+      const res = await apiFetch('/api/settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedSettings),
       });
       const data = await res.json();
@@ -503,16 +552,15 @@ export default function App() {
         }
       }
 
-      const res = await fetch('/api/students', {
+      const res = await apiFetch('/api/students', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(inputItems),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Failed to save student to Supabase.');
+        throw new Error(data.error || 'Failed to save student to database.');
       }
 
       const newItems = data.students || inputItems;
@@ -538,44 +586,234 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setSession(null);
-    setActiveTab("dashboard");
-    setViewMode("landing");
+    try {
+      await signOut();
+    } catch (err) {
+      console.warn('Logout notice:', err);
+    } finally {
+      setViewMode("landing");
+      setActiveTab("dashboard");
+    }
   };
 
   // 10. Session Restoration Loading Gate
-  // >>> AUTH TEMPORARILY DISABLED — RE-ENABLE WHEN READY <<<
-  // if (authLoading) {
-  //   return (
-  //     <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
-  //       <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
-  //       <span className="text-sm font-bold tracking-wider text-blue-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
-  //       <span className="text-xs text-slate-500 mt-2">ExamShield AI Autonomous Surveillance Suite</span>
-  //     </div>
-  //   );
-  // }
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[#070a16] flex flex-col items-center justify-center text-slate-300 font-mono p-4">
+        <div className="h-10 w-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mb-4" />
+        <span className="text-sm font-bold tracking-wider text-blue-400">VERIFYING ENCRYPTED SESSION GATEWAY...</span>
+        <span className="text-xs text-slate-500 mt-2">ExamShield AI Autonomous Surveillance Suite</span>
+      </div>
+    );
+  }
 
-  // activeSession fallback no longer needed — session is pre-initialized above
+  // Staff Cadet Registration View (accessible only to authorized staff)
+  if (viewMode === 'registration') {
+    const canRegister = session?.isStaff && ['Admin', 'Exam Controller', 'Operator'].includes(session?.role);
+    if (!canRegister) {
+      if (!session) {
+        return (
+          <LandingView
+            session={session}
+            onEnterDashboard={() => {
+              if (session?.isStaff) setViewMode('dashboard');
+              else if (session) setViewMode('unauthorized');
+            }}
+            onLoginSuccess={() => {}}
+            onLogout={handleLogout}
+          />
+        );
+      }
+      return (
+        <div className={`min-h-screen ${theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#070a16] text-slate-100'} p-4 flex items-center justify-center font-sans`}>
+          <div className={`max-w-md w-full rounded-3xl border p-6 sm:p-8 space-y-6 shadow-2xl text-center ${
+            theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0e1424] border-slate-800'
+          }`}>
+            <div className="h-14 w-14 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-500 flex items-center justify-center mx-auto">
+              <Lock className="h-7 w-7" />
+            </div>
+            <div className="space-y-2">
+              <span className="text-[10px] font-mono font-bold tracking-widest text-rose-500 uppercase px-2.5 py-1 rounded-full bg-rose-500/10 border border-rose-500/20">
+                REGISTRATION RESTRICTED
+              </span>
+              <h2 className="text-xl font-bold tracking-tight">Staff Authorization Required</h2>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Official student registration is restricted to authorized staff accounts (<code className="font-mono text-blue-400">Admin</code>, <code className="font-mono text-blue-400">Exam Controller</code>, or <code className="font-mono text-blue-400">Operator</code>). Your current account role does not have registration permissions.
+              </p>
+            </div>
+            <button
+              onClick={() => setViewMode(session?.isStaff ? 'dashboard' : 'landing')}
+              className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition-colors cursor-pointer"
+            >
+              Return to {session?.isStaff ? 'Dashboard' : 'Home'}
+            </button>
+          </div>
+        </div>
+      );
+    }
 
-  // Render Minimal Premium Landing Page
-  // >>> LANDING PAGE REDIRECT TEMPORARILY DISABLED <<<
-  // if (viewMode === 'landing' || (!session && viewMode !== 'dashboard')) {
-  //   return (
-  //     <LandingView
-  //       session={session}
-  //       onEnterDashboard={() => setViewMode('dashboard')}
-  //       onLoginSuccess={(user) => {
-  //         setSession(formatUserData(user));
-  //         setViewMode('dashboard');
-  //       }}
-  //     />
-  //   );
-  // }
+    return (
+      <div className={`min-h-screen ${theme === 'light' ? 'bg-slate-50 text-slate-900' : 'bg-[#070a13] text-slate-100'} p-4 sm:p-8 font-sans`}>
+        <div className="max-w-6xl mx-auto space-y-6">
+          <div className={`flex items-center justify-between pb-4 border-b ${theme === 'light' ? 'border-slate-200' : 'border-slate-800'}`}>
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-2xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center">
+                <Shield className="h-5 w-5 text-blue-400" />
+              </div>
+              <div>
+                <span className="text-sm font-bold tracking-tight">ExamShield AI</span>
+                <span className="block text-[10px] font-mono text-slate-400 uppercase">Staff Cadet Enrollment</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setViewMode('dashboard');
+                setActiveTab('dashboard');
+              }}
+              className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                theme === 'light'
+                  ? 'bg-white hover:bg-slate-100 border-slate-300 text-slate-700'
+                  : 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-300'
+              }`}
+            >
+              <span>← Return to Command Terminal</span>
+            </button>
+          </div>
+          <AddStudentView
+            onAddStudent={handleAddStudent}
+            onNavigateToDashboard={() => {
+              setViewMode('dashboard');
+              setActiveTab('dashboard');
+            }}
+            theme={theme}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Public Landing Page (Unauthenticated or explicit Landing view)
+  if (!session || viewMode === 'landing') {
+    return (
+      <LandingView
+        session={session}
+        onEnterDashboard={() => {
+          if (session?.isStaff) {
+            setViewMode('dashboard');
+          } else if (session) {
+            setViewMode('unauthorized');
+          }
+        }}
+        onLoginSuccess={() => {
+          // Sync effect will evaluate isStaff and route appropriately
+        }}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  // Authenticated User Without an Authorized Staff Role Gate (Fail-Closed)
+  if (session && !session.isStaff) {
+    return (
+      <div className={`min-h-screen ${theme === 'light' ? 'bg-slate-100 text-slate-900' : 'bg-[#070a16] text-slate-100'} p-4 flex items-center justify-center font-sans`}>
+        <div className={`max-w-md w-full rounded-3xl border p-6 sm:p-8 space-y-6 shadow-2xl text-center ${
+          theme === 'light' ? 'bg-white border-slate-200' : 'bg-[#0e1424] border-slate-800'
+        }`}>
+          <div className="h-14 w-14 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center mx-auto">
+            <Lock className="h-7 w-7" />
+          </div>
+
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono font-bold tracking-widest text-amber-500 uppercase px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/20">
+              STAFF AUTHORIZATION REQUIRED
+            </span>
+            <h2 className="text-xl font-bold tracking-tight">Access Restricted</h2>
+            <p className="text-xs text-slate-400 leading-relaxed">
+              You are authenticated as <strong className="text-white font-mono">{session.email}</strong>, but no authorized staff role has been assigned to your account in <code className="font-mono text-blue-400">app_metadata.role</code>.
+            </p>
+          </div>
+
+          <div className={`p-3.5 rounded-2xl border text-left text-xs font-mono space-y-1.5 ${
+            theme === 'light' ? 'bg-slate-50 border-slate-200 text-slate-700' : 'bg-[#070b14] border-slate-800 text-slate-400'
+          }`}>
+            <div className="flex justify-between">
+              <span>Account Status:</span>
+              <span className="text-emerald-400 font-bold">Authenticated</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Staff Authorization:</span>
+              <span className="text-rose-400 font-bold">Denied (Fail-Closed)</span>
+            </div>
+            {session.claimedRole && (
+              <div className="flex justify-between text-[11px] text-amber-400">
+                <span>Self-Claimed Role:</span>
+                <span>{session.claimedRole} (Untrusted)</span>
+              </div>
+            )}
+            <div className="pt-1 text-[10px] text-slate-500">
+              Permitted staff roles: Admin, Exam Controller, Operator, Viewer
+            </div>
+          </div>
+
+          <div className="space-y-2 pt-2">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setViewMode('landing')}
+                className={`flex-1 py-2 px-3 rounded-xl border text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer ${
+                  theme === 'light' ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700' : 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300'
+                }`}
+              >
+                <Home className="h-3.5 w-3.5" />
+                <span>Return Home</span>
+              </button>
+              <button
+                onClick={handleLogout}
+                className="flex-1 py-2 px-3 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                <span>Sign Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
 
-  // Render subviews dynamically
+  // Render subviews dynamically with direct tab selection guard
   const renderTabContent = () => {
+    // Check permission for active tab against trusted session role
+    const permittedRoles = TAB_PERMISSIONS[activeTab];
+    const userRole = session?.role;
+
+    if (!userRole || !permittedRoles || !permittedRoles.includes(userRole)) {
+      return (
+        <div className={`p-8 rounded-3xl border text-center space-y-4 max-w-lg mx-auto my-12 ${
+          theme === 'light' ? 'bg-white border-slate-200 text-slate-800' : 'bg-[#0f1422] border-slate-800 text-slate-200'
+        }`}>
+          <div className="h-12 w-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 flex items-center justify-center mx-auto">
+            <ShieldAlert className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold">Access Denied: Restricted View</h3>
+            <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
+              Your active role <span className="font-mono font-bold text-rose-400 bg-rose-500/10 px-1.5 py-0.5 rounded">{userRole || 'Unassigned'}</span> is not authorized to access the <strong>{activeTab}</strong> tab.
+            </p>
+            <p className="text-[11px] text-slate-500 font-mono mt-1">
+              Permitted roles: {permittedRoles ? permittedRoles.join(', ') : 'None'}
+            </p>
+          </div>
+          <button
+            onClick={() => setActiveTab('dashboard')}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors"
+          >
+            Return to Live Monitoring
+          </button>
+        </div>
+      );
+    }
+
     const isRoverValid = rover && rover.battery !== undefined;
     const isMetricsValid = metrics && metrics.cpu !== undefined;
     const isSettingsValid = settings && settings.examHalls;
@@ -601,6 +839,24 @@ export default function App() {
             theme={theme}
           />
         );
+      case 'exam-management':
+        return (
+          <ExamManagementView
+            allStudents={students}
+            theme={theme}
+            role={session?.role || ''}
+            operatorName={session?.fullName || 'Operator'}
+            examHalls={settings.examHalls}
+          />
+        );
+      case 'incident-review':
+        return (
+          <IncidentReviewView
+            theme={theme}
+            role={session?.role || ''}
+            operatorName={session?.fullName || 'Operator'}
+          />
+        );
       case 'add-student':
         return (
           <AddStudentView
@@ -613,7 +869,7 @@ export default function App() {
         return (
           <RoverView
             rover={rover}
-            role={session.role}
+            role={session?.role || ''}
             onSendCommand={handleSendCommand}
             theme={theme}
           />
@@ -622,7 +878,7 @@ export default function App() {
         return (
           <AlertsView
             alerts={alerts}
-            role={session.role}
+            role={session?.role || ''}
             onResolveAlert={handleResolveAlert}
             onTriggerAlert={handleTriggerMockAlert}
             theme={theme}
@@ -632,8 +888,8 @@ export default function App() {
         return (
           <ReportsView
             students={students}
-            role={session.role}
-            operatorName={session.fullName}
+            role={session?.role || ''}
+            operatorName={session?.fullName || 'Operator'}
             theme={theme}
           />
         );
@@ -647,6 +903,7 @@ export default function App() {
         return (
           <SettingsView
             settings={settings}
+            role={session?.role || ''}
             onSaveSettings={handleSaveSettings}
             theme={theme}
             onToggleTheme={toggleTheme}
@@ -734,7 +991,7 @@ export default function App() {
       {selectedStudent && (
         <StudentProfileModal
           student={students.find(s => s.id === selectedStudent.id) || selectedStudent}
-          role={session.role}
+          role={session?.role || ''}
           theme={theme}
           onClose={() => setSelectedStudent(null)}
           onUpdateDecision={(sId, dec, fields) => {

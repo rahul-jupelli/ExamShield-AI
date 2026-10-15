@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import GlassCard from './GlassCard';
 import { supabase } from '../lib/supabase';
+import { apiFetch } from '../services/apiClient';
 import { listStudentImagesFromBucket, getBucketPublicUrl } from '../services/storageService';
 import { parseEmbedding, formatEmbeddingPreview } from '../services/embeddingService';
 import StudentQRCode from './StudentQRCode';
@@ -41,7 +42,7 @@ export default function StudentProfileModal({
   const [localStudent, setLocalStudent] = useState(student);
   const [feedbackMsg, setFeedbackMsg] = useState(null);
 
-  const isControllerOrAdmin = !role || ['admin', 'exam controller', 'controller'].includes(String(role).toLowerCase());
+  const isControllerOrAdmin = Boolean(role && ['admin', 'exam controller', 'controller'].includes(String(role).toLowerCase()));
   const isLight = theme === 'light';
 
   // Keep localStudent synced if prop changes
@@ -90,10 +91,9 @@ export default function StudentProfileModal({
     setLocalStudent(updatedStudent);
 
     try {
-      // 2. Call Express API endpoint
-      const response = await fetch(`/api/students/${localStudent.id}/decision`, {
+      // 2. Call Express API endpoint with authenticated Bearer token
+      const response = await apiFetch(`/api/students/${localStudent.id}/decision`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ decision }),
       });
 

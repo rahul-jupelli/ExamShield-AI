@@ -15,11 +15,13 @@ import {
   Users, 
   Smartphone,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  UserPlus,
+  LogOut
 } from 'lucide-react';
 import AuthModal from './AuthModal';
 
-export default function LandingView({ session, onEnterDashboard, onLoginSuccess }) {
+export default function LandingView({ session, onEnterDashboard, onLoginSuccess, onLogout }) {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('signin'); // 'signin' | 'signup'
 
@@ -183,21 +185,44 @@ export default function LandingView({ session, onEnterDashboard, onLoginSuccess 
             <a href="#rover" className="hover:text-white transition-colors">Rover</a>
           </nav>
 
-          {/* Right Action: Login / Sign Up Button */}
+          {/* Right Action: Login / Sign Up Button or Staff Status */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => openAuth('signin')}
-              className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 transition-colors cursor-pointer"
-            >
-              Sign In
-            </button>
-            <button
-              onClick={() => openAuth('signup')}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_4px_16px_rgba(37,99,235,0.4)] active:scale-95"
-            >
-              <span>Login / Sign Up</span>
-              <ArrowRight className="h-3.5 w-3.5" />
-            </button>
+            {session ? (
+              <>
+                <button
+                  onClick={onEnterDashboard}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_4px_16px_rgba(37,99,235,0.4)] active:scale-95"
+                >
+                  <span>Enter Terminal</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+                {onLogout && (
+                  <button
+                    onClick={onLogout}
+                    title="Disconnect Terminal"
+                    className="p-2 text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-full transition-colors cursor-pointer"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={() => openAuth('signin')}
+                  className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 transition-colors cursor-pointer"
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => openAuth('signup')}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-semibold px-5 py-2 rounded-full transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_4px_16px_rgba(37,99,235,0.4)] active:scale-95"
+                >
+                  <span>Staff Portal</span>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              </>
+            )}
           </div>
 
         </div>
@@ -524,12 +549,12 @@ export default function LandingView({ session, onEnterDashboard, onLoginSuccess 
             Enter the ExamShield command center.
           </p>
 
-          <div className="pt-2">
+          <div className="pt-2 flex flex-wrap justify-center gap-4">
             <button
-              onClick={() => session ? onEnterDashboard() : openAuth('signup')}
+              onClick={() => session ? onEnterDashboard() : openAuth('signin')}
               className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-8 py-4 rounded-xl shadow-lg shadow-blue-600/20 transition-all inline-flex items-center gap-2 cursor-pointer"
             >
-              <span>Get Started</span>
+              <span>{session ? "Enter Command Center" : "Operator Sign In"}</span>
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>

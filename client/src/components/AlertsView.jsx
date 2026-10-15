@@ -23,11 +23,16 @@ export default function AlertsView({ alerts = [], role, onResolveAlert, onTrigge
   const [resolvingId, setResolvingId] = useState(null);
   const [resolveActionText, setResolveActionText] = useState('');
 
-  const isReadOnly = role === 'Viewer';
+  const canAct = ['Admin', 'Exam Controller', 'Operator'].includes(role);
+  const isReadOnly = !canAct;
   const isLight = theme === 'light';
 
   const handleCreateAlert = (e) => {
     e.preventDefault();
+    if (!canAct) {
+      console.warn('Unauthorized alert creation attempt blocked.');
+      return;
+    }
     onTriggerAlert({
       title: newTitle,
       priority: newPriority,
@@ -38,11 +43,16 @@ export default function AlertsView({ alerts = [], role, onResolveAlert, onTrigge
   };
 
   const startResolve = (alertId) => {
+    if (!canAct) return;
     setResolvingId(alertId);
     setResolveActionText('Dispatched floor supervisors to location. Secured situation. Logged resolution.');
   };
 
   const submitResolve = (alertId) => {
+    if (!canAct) {
+      console.warn('Unauthorized alert resolution attempt blocked.');
+      return;
+    }
     onResolveAlert(alertId, 'Resolved', resolveActionText);
     setResolvingId(null);
     setResolveActionText('');

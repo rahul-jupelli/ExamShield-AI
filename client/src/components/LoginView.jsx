@@ -105,7 +105,6 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
         options: {
           data: {
             full_name: fullName.trim(),
-            role: 'Admin',
           },
         },
       });
@@ -118,7 +117,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
       if (data?.session && onLoginSuccess) {
         onLoginSuccess(data.user);
       } else {
-        setSuccessMessage("Admin account created successfully! Please check your email to confirm registration or sign in.");
+        setSuccessMessage("Account created successfully! Please check your email to confirm registration or sign in.");
         setTimeout(() => {
           switchMode('signin');
         }, 2500);
@@ -340,13 +339,13 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
               <h2 className={`text-xl sm:text-2xl font-bold mb-0.5 tracking-tight ${
                 isLight ? 'text-slate-900' : 'text-white'
               }`}>
-                {mode === 'signin' && 'Admin Security Gateway'}
-                {mode === 'signup' && 'Register Admin Account'}
+                {mode === 'signin' && 'Staff Security Gateway'}
+                {mode === 'signup' && 'Register Staff Account'}
                 {mode === 'forgot' && 'Reset Access Credentials'}
               </h2>
               <p className={`text-[11px] sm:text-xs ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>
-                {mode === 'signin' && 'Sign in using your registered admin email & password.'}
-                {mode === 'signup' && 'Create a new Administrator account for ExamShield.'}
+                {mode === 'signin' && 'Sign in using your authorized staff email & password.'}
+                {mode === 'signup' && 'Create an account. Authorized roles are provisioned by an administrator.'}
                 {mode === 'forgot' && 'Enter your email to receive a password reset link.'}
               </p>
             </div>
@@ -560,7 +559,7 @@ export default function LoginView({ onLoginSuccess, theme = 'dark', onToggleThem
                   ) : (
                     <>
                       <UserPlus className="h-4 w-4" />
-                      <span>CREATE ADMIN ACCOUNT</span>
+                      <span>REGISTER ACCOUNT</span>
                     </>
                   )}
                 </button>

@@ -32,8 +32,9 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
   const [videoFilter, setVideoFilter] = useState('normal');
   const canvasRef = useRef(null);
 
-  // Quick action restriction check
-  const isReadOnly = role === 'Viewer';
+  // Quick action restriction check: only Operator, Exam Controller, or Admin can drive the chassis
+  const canControl = ['Admin', 'Exam Controller', 'Operator'].includes(role);
+  const isReadOnly = !canControl;
   const isLight = theme === 'light';
 
   const roverRef = useRef(rover);
@@ -246,12 +247,19 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
 
           {/* Drive & Pilot Commands Section */}
           <GlassCard theme={theme} className="p-6 space-y-4">
-            <h3 className={`text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 ${
-              isLight ? 'text-slate-800' : 'text-slate-300'
-            }`}>
-              <Gauge className="h-4 w-4 text-blue-500" />
-              Chassis Drive & Navigation Controller
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <h3 className={`text-xs font-bold font-mono uppercase tracking-wider flex items-center gap-2 ${
+                isLight ? 'text-slate-800' : 'text-slate-300'
+              }`}>
+                <Gauge className="h-4 w-4 text-blue-500" />
+                Chassis Drive & Navigation Controller
+              </h3>
+              {!canControl && (
+                <span className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500">
+                  READ-ONLY: Operator / Admin required to drive
+                </span>
+              )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
               
@@ -266,57 +274,74 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
                 <div className="grid grid-cols-3 gap-2.5 w-44">
                   <div />
                   <button 
-                    onClick={() => onSendCommand('fwd')}
-                    className={`h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-sm ${
-                      isLight 
-                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold' 
-                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800'
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('fwd')}
+                    className={`h-11 rounded-xl border flex items-center justify-center transition-all shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500'
+                        : isLight 
+                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold cursor-pointer' 
+                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800 cursor-pointer'
                     }`}
-                    title="Move Forward"
+                    title={canControl ? "Move Forward" : "Read-only access"}
                   >
                     <ArrowUp className="h-5 w-5" />
                   </button>
                   <div />
 
                   <button 
-                    onClick={() => onSendCommand('left')}
-                    className={`h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-sm ${
-                      isLight 
-                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold' 
-                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800'
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('left')}
+                    className={`h-11 rounded-xl border flex items-center justify-center transition-all shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500'
+                        : isLight 
+                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold cursor-pointer' 
+                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800 cursor-pointer'
                     }`}
-                    title="Steer Left"
+                    title={canControl ? "Steer Left" : "Read-only access"}
                   >
                     <ArrowLeft className="h-5 w-5" />
                   </button>
                   <button 
-                    onClick={() => onSendCommand('stop')}
-                    className="h-11 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 flex items-center justify-center font-bold text-xs transition-all cursor-pointer hover:bg-rose-500/20 shadow-sm"
-                    title="Stop Drive Motors"
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('stop')}
+                    className={`h-11 rounded-xl border flex items-center justify-center font-bold text-xs transition-all shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-rose-500/5 border-rose-500/10 text-rose-400/40'
+                        : 'bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/20 cursor-pointer'
+                    }`}
+                    title={canControl ? "Stop Drive Motors" : "Read-only access"}
                   >
                     STOP
                   </button>
                   <button 
-                    onClick={() => onSendCommand('right')}
-                    className={`h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-sm ${
-                      isLight 
-                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold' 
-                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800'
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('right')}
+                    className={`h-11 rounded-xl border flex items-center justify-center transition-all shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500'
+                        : isLight 
+                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold cursor-pointer' 
+                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800 cursor-pointer'
                     }`}
-                    title="Steer Right"
+                    title={canControl ? "Steer Right" : "Read-only access"}
                   >
                     <ArrowRight className="h-5 w-5" />
                   </button>
 
                   <div />
                   <button 
-                    onClick={() => onSendCommand('bwd')}
-                    className={`h-11 rounded-xl border flex items-center justify-center transition-all cursor-pointer shadow-sm ${
-                      isLight 
-                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold' 
-                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800'
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('bwd')}
+                    className={`h-11 rounded-xl border flex items-center justify-center transition-all shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-slate-800 text-slate-500'
+                        : isLight 
+                        ? 'bg-white border-slate-300 text-slate-900 hover:bg-blue-50 hover:border-blue-400 font-extrabold cursor-pointer' 
+                        : 'bg-slate-900 border-blue-900/30 text-white hover:border-cyan-400 hover:bg-slate-800 cursor-pointer'
                     }`}
-                    title="Move Backward"
+                    title={canControl ? "Move Backward" : "Read-only access"}
                   >
                     <ArrowDown className="h-5 w-5" />
                   </button>
@@ -328,11 +353,14 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
               <div className="md:col-span-7 flex flex-col justify-between space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    onClick={() => onSendCommand('home')}
-                    className={`p-3.5 rounded-2xl border text-left text-xs transition-all flex items-center gap-3 cursor-pointer shadow-sm ${
-                      isLight 
-                        ? 'bg-white border-slate-300 hover:border-blue-400 hover:bg-blue-50/50' 
-                        : 'bg-slate-900 border-white/5 hover:border-blue-500/40 hover:bg-slate-800'
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('home')}
+                    className={`p-3.5 rounded-2xl border text-left text-xs transition-all flex items-center gap-3 shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-white/5'
+                        : isLight 
+                        ? 'bg-white border-slate-300 hover:border-blue-400 hover:bg-blue-50/50 cursor-pointer' 
+                        : 'bg-slate-900 border-white/5 hover:border-blue-500/40 hover:bg-slate-800 cursor-pointer'
                     }`}
                   >
                     <Anchor className="h-5 w-5 text-blue-600" />
@@ -343,11 +371,14 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
                   </button>
 
                   <button
-                    onClick={() => onSendCommand('stop')}
-                    className={`p-3.5 rounded-2xl border text-left text-xs transition-all flex items-center gap-3 cursor-pointer shadow-sm ${
-                      isLight 
-                        ? 'bg-white border-slate-300 hover:border-amber-400 hover:bg-amber-50/50' 
-                        : 'bg-slate-900 border-white/5 hover:border-blue-500/40 hover:bg-slate-800'
+                    disabled={!canControl}
+                    onClick={() => canControl && onSendCommand('stop')}
+                    className={`p-3.5 rounded-2xl border text-left text-xs transition-all flex items-center gap-3 shadow-sm ${
+                      !canControl
+                        ? 'opacity-40 cursor-not-allowed bg-slate-900 border-white/5'
+                        : isLight 
+                        ? 'bg-white border-slate-300 hover:border-amber-400 hover:bg-amber-50/50 cursor-pointer' 
+                        : 'bg-slate-900 border-white/5 hover:border-blue-500/40 hover:bg-slate-800 cursor-pointer'
                     }`}
                   >
                     <Hand className="h-5 w-5 text-amber-500" />
@@ -360,8 +391,13 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
 
                 {/* BIG RED EMERGENCY BUTTON */}
                 <button
-                  onClick={() => onSendCommand('estop')}
-                  className="w-full py-4 px-6 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white border border-rose-500/30 flex items-center justify-center gap-3 shadow-lg shadow-rose-600/20 active:translate-y-px transition-all font-sans cursor-pointer"
+                  disabled={!canControl}
+                  onClick={() => canControl && onSendCommand('estop')}
+                  className={`w-full py-4 px-6 rounded-2xl text-white border flex items-center justify-center gap-3 shadow-lg active:translate-y-px transition-all font-sans ${
+                    !canControl
+                      ? 'opacity-40 cursor-not-allowed bg-rose-950 border-rose-900/40'
+                      : 'bg-rose-600 hover:bg-rose-500 border-rose-500/30 shadow-rose-600/20 cursor-pointer'
+                  }`}
                 >
                   <AlertTriangle className="h-5 w-5 animate-bounce" />
                   <div className="text-left">

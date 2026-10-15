@@ -7,7 +7,6 @@ export const signUp = (email, password, fullName) => {
     options: {
       data: {
         full_name: fullName || email,
-        role: "Admin"
       }
     }
   });
