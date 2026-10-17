@@ -2,6 +2,8 @@ import 'dotenv/config';
 import dns from 'dns';
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import { randomUUID, timingSafeEqual } from 'crypto';
 import http from 'http';
 import { WebSocket, WebSocketServer } from 'ws';
 import { createServer as createViteServer } from 'vite';
@@ -54,6 +56,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Optional service-role client used only by the server-side model scheduler (reads exams/exam_students
+// without a user session). Falls back to the anon client if the key is not provided.
+const schedulerDb = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ? createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY)
+  : supabase;
 
 // ==========================================
 // Database Deduplication Utility Function
@@ -546,17 +554,316 @@ app.put('/api/incidents/:id/review', authenticateUser, authorizeRoles('Admin', '
   }
 });
 
+// ==========================================
+// Raspberry Pi 4 model control (Face Verification / Device Detection)
+// Both .pt models live on the Pi; the dashboard only sends start/stop commands.
+// ==========================================
+const PI_BRIDGE_KEY = process.env.PI_BRIDGE_KEY || '';
+const MODEL_NAMES = ['face_verification', 'device_detection'];
+const MODEL_ACTIONS = ['start', 'stop'];
+const FV_WINDOW_MS = 60 * 60 * 1000;
+const MODEL_ACK_TIMEOUT_MS = 8000;
+
+const piClients = new Set();
+const pendingModelAcks = new Map();
+let modelState = {
+  activeModel: 'none',
+  examId: null,
+  status: 'stopped',
+  fps: null,
+  error: null,
+  updatedAt: null
+};
+
+function getModelStatusPayload() {
+  return { piConnected: piClients.size > 0, ...modelState };
+}
+
+function applyModelState(patch) {
+  modelState = { ...modelState, ...patch, updatedAt: new Date().toISOString() };
+  broadcast({ type: 'MODEL_STATUS', model: getModelStatusPayload() });
+}
+
+function isValidPiKey(candidate) {
+  if (!PI_BRIDGE_KEY || typeof candidate !== 'string') return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(PI_BRIDGE_KEY);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 // Rover inference node health check
 app.get('/api/rover/inference-node', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), (req, res) => {
-  // Clear indicator for future Raspberry Pi 4 integration
+  const connected = piClients.size > 0;
   res.json({
-    connected: false,
+    connected,
     hardware: 'Raspberry Pi 4 Model B (Inference System)',
     endpoint: '/api/rover/inference-stream',
-    status: 'Standby / Waiting for hardware socket connection',
+    status: connected
+      ? (modelState.activeModel === 'none' ? 'Connected / No model running' : `Connected / ${modelState.activeModel} running`)
+      : 'Standby / Waiting for hardware socket connection',
+    activeModel: modelState.activeModel,
     timestamp: new Date().toISOString()
   });
 });
+
+// ---- Per-exam lifecycle state (persisted so a server restart does not lose manual choices) ----
+const LIFECYCLE_FILE = path.join(process.cwd(), '.model-lifecycle.json');
+const SCHEDULER_INTERVAL_MS = 5000;
+const AUTO_RETRY_MS = 10000;
+const lifecycle = new Map();   // examId -> { fvRunning, fvEverStarted, ddManuallyStopped, sched }
+const lastAutoAttempt = new Map(); // `${examId}:${model}:${action}` -> timestamp
+
+try {
+  if (fs.existsSync(LIFECYCLE_FILE)) {
+    const saved = JSON.parse(fs.readFileSync(LIFECYCLE_FILE, 'utf8'));
+    Object.entries(saved).forEach(([id, lc]) => lifecycle.set(id, lc));
+  }
+} catch (e) {
+  console.warn('[MODEL LIFECYCLE] Could not load saved state:', e.message);
+}
+
+function persistLifecycle() {
+  try {
+    fs.writeFileSync(LIFECYCLE_FILE, JSON.stringify(Object.fromEntries(lifecycle)));
+  } catch (e) {
+    console.warn('[MODEL LIFECYCLE] Could not save state:', e.message);
+  }
+}
+
+function getLifecycle(examId) {
+  if (!lifecycle.has(examId)) {
+    lifecycle.set(examId, { fvRunning: false, fvEverStarted: false, ddManuallyStopped: false, sched: null });
+  }
+  return lifecycle.get(examId);
+}
+
+// Serializes every Pi command (manual and automatic) so models can never race each other
+let modelLockChain = Promise.resolve();
+function withModelLock(fn) {
+  const run = modelLockChain.then(fn, fn);
+  modelLockChain = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Single place that validates and executes a model command on the Pi.
+ * sched = { startMs, endMs, cancelled }; opts.source = 'manual' | 'auto'.
+ * Returns { code, body } (HTTP-style) so both the REST route and the scheduler can use it.
+ */
+function executeModelCommand(examId, model, action, sched, opts = {}) {
+  const manual = opts.source !== 'auto';
+  return withModelLock(async () => {
+    const lc = getLifecycle(examId);
+    lc.sched = sched;
+    const { startMs, endMs, cancelled } = sched;
+    const now = Date.now();
+
+    if (action === 'start') {
+      if (cancelled) {
+        return { code: 409, body: { success: false, error: 'Exam is cancelled.' } };
+      }
+      if (model === 'face_verification' && !(now >= startMs - FV_WINDOW_MS && now < startMs)) {
+        return { code: 403, body: { success: false, error: 'Face verification can only run from 60 minutes before the exam until exam start.' } };
+      }
+      if (model === 'device_detection' && !(now >= startMs && now < endMs)) {
+        return { code: 403, body: { success: false, error: 'Device detection can only run during the exam time.' } };
+      }
+      // Models must never run in parallel (and the Pi serves one exam at a time)
+      if (modelState.activeModel !== 'none' && (modelState.activeModel !== model || modelState.examId !== examId)) {
+        return { code: 409, body: { success: false, error: `Cannot start ${model}: ${modelState.activeModel} is still running on the Pi.`, state: getModelStatusPayload() } };
+      }
+      if (piClients.size === 0) {
+        return { code: 503, body: { success: false, error: 'Raspberry Pi 4 is not connected.' } };
+      }
+    } else if (modelState.activeModel !== model || modelState.examId !== examId) {
+      // Nothing to stop for this model/exam - stop is idempotent, but intent is still recorded
+      if (model === 'face_verification') lc.fvRunning = false;
+      if (model === 'device_detection' && manual) lc.ddManuallyStopped = true;
+      persistLifecycle();
+      return { code: 200, body: { success: true, noop: true, state: getModelStatusPayload() } };
+    } else if (piClients.size === 0) {
+      return { code: 503, body: { success: false, error: 'Raspberry Pi 4 is not connected.' } };
+    }
+
+    const requestId = randomUUID();
+    const ackPromise = new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingModelAcks.delete(requestId);
+        resolve({ ok: false, error: 'Timed out waiting for Raspberry Pi acknowledgement.', timeout: true });
+      }, MODEL_ACK_TIMEOUT_MS);
+      pendingModelAcks.set(requestId, (ack) => {
+        clearTimeout(timer);
+        pendingModelAcks.delete(requestId);
+        resolve(ack);
+      });
+    });
+
+    const packet = JSON.stringify({ type: 'MODEL_COMMAND', requestId, model, action, examId });
+    for (const pi of piClients) {
+      if (pi.readyState === WebSocket.OPEN) pi.send(packet);
+    }
+
+    const ack = await ackPromise;
+    if (!ack.ok) {
+      return { code: ack.timeout ? 504 : 502, body: { success: false, error: ack.error || 'Pi rejected the command.', state: getModelStatusPayload() } };
+    }
+
+    if (action === 'start') {
+      applyModelState({ activeModel: model, examId, status: 'running', error: null });
+      if (model === 'face_verification') {
+        lc.fvRunning = true;
+        lc.fvEverStarted = true;
+      } else if (manual) {
+        lc.ddManuallyStopped = false;
+      }
+    } else {
+      applyModelState({ activeModel: 'none', examId: null, status: 'stopped', error: null });
+      if (model === 'face_verification') lc.fvRunning = false;
+      else if (manual) lc.ddManuallyStopped = true;
+    }
+    persistLifecycle();
+    return { code: 200, body: { success: true, state: getModelStatusPayload() } };
+  });
+}
+
+// Current model state reported by the Pi 4 (+ per-exam lifecycle flags when ?examId= is given)
+app.get('/api/rover/model-status', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator', 'Viewer'), (req, res) => {
+  const payload = getModelStatusPayload();
+  const { examId } = req.query;
+  if (examId && lifecycle.has(String(examId))) {
+    const { fvRunning, fvEverStarted, ddManuallyStopped } = lifecycle.get(String(examId));
+    payload.lifecycle = { fvRunning, fvEverStarted, ddManuallyStopped };
+  } else {
+    payload.lifecycle = { fvRunning: false, fvEverStarted: false, ddManuallyStopped: false };
+  }
+  res.json(payload);
+});
+
+// Manual start / stop of a model on the Pi 4 (Admin, Exam Controller, Operator only)
+app.post('/api/rover/model-control', authenticateUser, authorizeRoles('Admin', 'Exam Controller', 'Operator'), async (req, res) => {
+  const { examId, model, action } = req.body || {};
+
+  if (!examId || !MODEL_NAMES.includes(model) || !MODEL_ACTIONS.includes(action)) {
+    return res.status(400).json({ success: false, error: 'examId, model (face_verification|device_detection) and action (start|stop) are required.' });
+  }
+
+  // Exam window: DB is authoritative, request body is only a fallback for cached/offline exams
+  let sched = null;
+  try {
+    const { data } = await schedulerDb.from('exams').select('start_time, end_time, status').eq('id', examId).single();
+    if (data) {
+      sched = { startMs: Date.parse(data.start_time), endMs: Date.parse(data.end_time), cancelled: data.status === 'cancelled' };
+    }
+  } catch (e) { /* fall through to body fallback */ }
+  if (!sched || isNaN(sched.startMs) || isNaN(sched.endMs)) {
+    sched = { startMs: Date.parse(req.body.start_time), endMs: Date.parse(req.body.end_time), cancelled: false };
+  }
+  if (isNaN(sched.startMs) || isNaN(sched.endMs)) {
+    return res.status(400).json({ success: false, error: 'Could not determine exam schedule.' });
+  }
+
+  const { code, body } = await executeModelCommand(examId, model, action, sched, { source: 'manual' });
+  res.status(code).json(body);
+});
+
+// ---- Server-side automation (runs regardless of whether anyone has the dashboard open) ----
+//  - FV auto-stop (1): every enrolled student is 'verified' (before exam start)
+//  - FV auto-stop (2): exam start reached -> FV force-stopped
+//  - DD auto-start: exam window, only once the Pi reports NO model running (FV confirmed stopped)
+//  - DD auto-stop: exam end / cancelled
+let schedulerBusy = false;
+let schedulerWarned = false;
+
+function throttled(key) {
+  const last = lastAutoAttempt.get(key) || 0;
+  if (Date.now() - last < AUTO_RETRY_MS) return true;
+  lastAutoAttempt.set(key, Date.now());
+  return false;
+}
+
+async function allStudentsVerified(examId) {
+  const { data, error } = await schedulerDb.from('exam_students').select('verification_status').eq('exam_id', examId);
+  if (error || !data) return false;
+  return data.length > 0 && data.every((r) => r.verification_status === 'verified');
+}
+
+async function modelSchedulerTick() {
+  if (schedulerBusy) return;
+  schedulerBusy = true;
+  try {
+    const now = Date.now();
+    const candidates = new Map(); // examId -> sched
+
+    const { data: exams, error } = await schedulerDb.from('exams').select('id, start_time, end_time, status');
+    if (error) {
+      if (!schedulerWarned) {
+        console.warn('[MODEL SCHEDULER] Cannot read exams (set SUPABASE_SERVICE_ROLE_KEY if RLS blocks the anon key):', error.message);
+        schedulerWarned = true;
+      }
+    } else {
+      (exams || []).forEach((e) => {
+        candidates.set(e.id, { startMs: Date.parse(e.start_time), endMs: Date.parse(e.end_time), cancelled: e.status === 'cancelled' });
+      });
+    }
+    // Exams that were controlled manually but are not in the DB (cached/offline exams) keep their stored schedule
+    lifecycle.forEach((lc, id) => {
+      if (!candidates.has(id) && lc.sched) candidates.set(id, lc.sched);
+    });
+
+    const ordered = [...candidates.entries()]
+      .filter(([, s]) => !isNaN(s.startMs) && !isNaN(s.endMs))
+      .sort((a, b) => a[1].startMs - b[1].startMs);
+
+    for (const [id, s] of ordered) {
+      const lc = lifecycle.get(id) || { fvRunning: false, fvEverStarted: false, ddManuallyStopped: false };
+      const ownsPi = modelState.examId === id && modelState.activeModel !== 'none';
+
+      // Exam over or cancelled -> stop whatever is running for it and drop its state
+      if (s.cancelled || now >= s.endMs) {
+        if (ownsPi && piClients.size > 0 && !throttled(`${id}:${modelState.activeModel}:stop-end`)) {
+          await executeModelCommand(id, modelState.activeModel, 'stop', s, { source: 'auto' });
+        }
+        if (!(modelState.examId === id && modelState.activeModel !== 'none') && lifecycle.has(id)) {
+          lifecycle.delete(id);
+          persistLifecycle();
+        }
+        continue;
+      }
+
+      // Exam window: FV must be off, then DD starts
+      if (now >= s.startMs) {
+        const fvStillOn = lc.fvRunning || (ownsPi && modelState.activeModel === 'face_verification');
+        if (fvStillOn) {
+          // AUTO-STOP (2): force-stop FV at exam start
+          const r = await executeModelCommand(id, 'face_verification', 'stop', s, { source: 'auto' });
+          if (r.code !== 200) continue; // FV not confirmed stopped -> DD must NOT start
+        }
+        // Gate: Pi must report no model running before DD starts
+        if (modelState.activeModel === 'none' && piClients.size > 0 && !lc.ddManuallyStopped && !throttled(`${id}:device_detection:start`)) {
+          await executeModelCommand(id, 'device_detection', 'start', s, { source: 'auto' });
+        }
+        continue;
+      }
+
+      // Face verification window
+      if (now >= s.startMs - FV_WINDOW_MS && lc.fvRunning) {
+        // AUTO-STOP (1): all enrolled students verified before exam time
+        if (await allStudentsVerified(id)) {
+          await executeModelCommand(id, 'face_verification', 'stop', s, { source: 'auto' });
+        } else if (modelState.activeModel === 'none' && piClients.size > 0 && !throttled(`${id}:face_verification:recover`)) {
+          // FV should be running but the Pi has none (worker crash / Pi reboot) -> bring it back
+          await executeModelCommand(id, 'face_verification', 'start', s, { source: 'auto' });
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[MODEL SCHEDULER] tick error:', err.message);
+  } finally {
+    schedulerBusy = false;
+  }
+}
+
+setInterval(modelSchedulerTick, SCHEDULER_INTERVAL_MS);
 
 
 // Default Fallback Data Structure for Resilient Offline / Failed DB Operations
@@ -928,6 +1235,44 @@ wss.on('connection', async (ws) => {
         return;
       }
 
+      // Raspberry Pi 4 bridge authentication (shared secret, separate from staff auth)
+      if (data.type === 'PI_AUTH') {
+        if (!isValidPiKey(data.key)) {
+          ws.send(JSON.stringify({ type: 'AUTH_ERROR', error: 'Invalid or missing Pi bridge key (set PI_BRIDGE_KEY on server and Pi).' }));
+          ws.close(4401, 'Unauthorized');
+          return;
+        }
+        clearTimeout(authTimeout);
+        ws.isPi = true;
+        piClients.add(ws);
+        ws.send(JSON.stringify({ type: 'PI_AUTH_SUCCESS' }));
+        broadcast({ type: 'MODEL_STATUS', model: getModelStatusPayload() });
+        return;
+      }
+
+      if (ws.isPi && data.type === 'MODEL_ACK') {
+        const resolver = pendingModelAcks.get(data.requestId);
+        if (resolver) resolver({ ok: !!data.ok, error: data.error });
+        return;
+      }
+
+      if (ws.isPi && data.type === 'MODEL_STATUS') {
+        const next = {
+          activeModel: MODEL_NAMES.includes(data.activeModel) ? data.activeModel : 'none',
+          examId: data.activeModel && data.activeModel !== 'none' ? (data.examId || modelState.examId) : null,
+          status: data.status || 'stopped',
+          fps: typeof data.fps === 'number' ? data.fps : null,
+          error: data.error || null
+        };
+        // Only broadcast when the meaningful state changed (Pi reports every few seconds)
+        if (next.activeModel !== modelState.activeModel || next.status !== modelState.status || next.examId !== modelState.examId || next.error !== modelState.error) {
+          applyModelState(next);
+        } else {
+          modelState = { ...modelState, fps: next.fps };
+        }
+        return;
+      }
+
       if (data.type === 'PING') {
         ws.send(JSON.stringify({ type: 'PONG' }));
         return;
@@ -940,6 +1285,13 @@ wss.on('connection', async (ws) => {
   ws.on('close', () => {
     clearTimeout(authTimeout);
     clients.delete(ws);
+    if (ws.isPi) {
+      piClients.delete(ws);
+      if (piClients.size === 0) {
+        pendingModelAcks.forEach((resolve) => resolve({ ok: false, error: 'Raspberry Pi disconnected.' }));
+        applyModelState({ activeModel: 'none', examId: null, status: 'stopped', fps: null });
+      }
+    }
   });
 });
 

@@ -9,6 +9,7 @@ import {
   Clock
 } from 'lucide-react';
 import { getBucketPublicUrl } from '../services/storageService';
+import { getStudentVerificationStatus } from '../services/examService';
 
 export default function DashboardView({ students = [], rover = {}, alerts = [], onSelectStudent, theme = 'dark' }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -30,7 +31,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
   // 1. Calculate stats from deduplicated live variables
   const stats = useMemo(() => {
     const total = uniqueStudents.length;
-    const verified = uniqueStudents.filter(s => s.status === 'Verified').length;
+    const verified = uniqueStudents.filter(s => getStudentVerificationStatus(s) === 'verified').length;
     const pending = total - verified;
 
     return {
@@ -44,7 +45,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
   const filteredStudents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return uniqueStudents.filter(s => {
-      const isVerified = s.status === 'Verified';
+      const isVerified = getStudentVerificationStatus(s) === 'verified';
       // Category filter
       if (activeCategory === 'verified' && !isVerified) return false;
       if (activeCategory === 'pending' && isVerified) return false;
@@ -53,8 +54,8 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
       if (!q) return true;
       return (
         s.name.toLowerCase().includes(q) || 
-        s.hallTicket.toLowerCase().includes(q) || 
-        s.seat.toLowerCase().includes(q)
+        (s.hallTicket && s.hallTicket.toLowerCase().includes(q)) || 
+        (s.seat && s.seat.toLowerCase().includes(q))
       );
     });
   }, [uniqueStudents, searchQuery, activeCategory]);
@@ -65,7 +66,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
     const verified = [];
 
     filteredStudents.forEach(s => {
-      if (s.status === 'Verified') {
+      if (getStudentVerificationStatus(s) === 'verified') {
         verified.push(s);
       } else {
         pending.push(s);

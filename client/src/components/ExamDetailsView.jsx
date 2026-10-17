@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import ExamStatusBadge from './ExamStatusBadge';
 import IncidentReviewModal from './IncidentReviewModal';
+import ModelControlPanel from './ModelControlPanel';
 import { formatKolkata, getRelativeTime } from '../utils/timezone';
 import {
   getExamStudents,
@@ -31,7 +32,8 @@ import {
   updateExamStudentVerification,
   updateIncidentReview,
   cancelExam,
-  subscribeToExamUpdates
+  subscribeToExamUpdates,
+  getStudentVerificationStatus
 } from '../services/examService';
 import { getBucketPublicUrl } from '../services/storageService';
 
@@ -65,9 +67,9 @@ export default function ExamDetailsView({
   const [selectedIncident, setSelectedIncident] = useState(null);
 
   // Load students and incidents
-  const loadExamData = useCallback(async () => {
+  const loadExamData = useCallback(async (silent = false) => {
     if (!exam?.id) return;
-    setLoadingData(true);
+    if (!silent) setLoadingData(true);
     try {
       const [assigned, incs] = await Promise.all([
         getExamStudents(exam.id),
@@ -78,7 +80,7 @@ export default function ExamDetailsView({
     } catch (err) {
       console.warn('Error loading exam details:', err);
     } finally {
-      setLoadingData(false);
+      if (!silent) setLoadingData(false);
     }
   }, [exam?.id]);
 
@@ -86,11 +88,23 @@ export default function ExamDetailsView({
     loadExamData();
   }, [loadExamData]);
 
+  // Polling fallback: keeps verification status fresh even when Supabase realtime
+  // is not enabled for these tables (or the websocket drops).
+  useEffect(() => {
+    const t = setInterval(() => loadExamData(true), 5000);
+    return () => clearInterval(t);
+  }, [loadExamData]);
+
   // Subscribe to realtime updates for this exam
   useEffect(() => {
     const unsubscribe = subscribeToExamUpdates((payload) => {
-      if (payload.table === 'exam_students' || payload.table === 'device_incidents' || payload.table === 'exams') {
-        loadExamData();
+      if (
+        payload.table === 'exam_students' ||
+        payload.table === 'device_incidents' ||
+        payload.table === 'exams' ||
+        payload.table === 'students'
+      ) {
+        loadExamData(true);
       }
     });
     return () => unsubscribe();
@@ -99,10 +113,10 @@ export default function ExamDetailsView({
   // Calculate student verification statistics
   const verificationStats = useMemo(() => {
     const total = students.length;
-    const verified = students.filter(s => s.verification_status === 'verified').length;
-    const unverified = students.filter(s => s.verification_status === 'unverified').length;
-    const failed = students.filter(s => s.verification_status === 'failed').length;
-    const absent = students.filter(s => s.verification_status === 'absent').length;
+    const verified = students.filter(s => getStudentVerificationStatus(s) === 'verified').length;
+    const unverified = students.filter(s => getStudentVerificationStatus(s) === 'unverified').length;
+    const failed = students.filter(s => getStudentVerificationStatus(s) === 'failed').length;
+    const absent = students.filter(s => getStudentVerificationStatus(s) === 'absent').length;
     return { total, verified, unverified, failed, absent };
   }, [students]);
 
@@ -131,7 +145,8 @@ export default function ExamDetailsView({
     const q = studentSearch.toLowerCase().trim();
     return students.filter(s => {
       const studentObj = s.student || s;
-      if (verificationFilter !== 'ALL' && s.verification_status !== verificationFilter) return false;
+      const vStatus = getStudentVerificationStatus(s);
+      if (verificationFilter !== 'ALL' && vStatus !== verificationFilter.toLowerCase()) return false;
       if (!q) return true;
       const name = (studentObj.name || '').toLowerCase();
       const ticket = (studentObj.hallTicket || studentObj.id || '').toLowerCase();
@@ -200,7 +215,7 @@ export default function ExamDetailsView({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={loadExamData}
+            onClick={() => loadExamData()}
             title="Refresh Data"
             className={`p-2 rounded-2xl border text-slate-400 hover:text-white cursor-pointer transition-colors ${
               isLight ? 'bg-white border-slate-300' : 'bg-[#14192b] border-slate-800'
@@ -349,6 +364,14 @@ export default function ExamDetailsView({
         </div>
       </div>
 
+      {/* AI Model Control: Face Verification -> Device Detection on the Pi 4 */}
+      <ModelControlPanel
+        exam={exam}
+        students={students}
+        theme={theme}
+        canControl={role !== 'Viewer'}
+      />
+
       {/* Navigation Sub-Tabs: Verification vs Incidents */}
       <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
         <button
@@ -457,7 +480,7 @@ export default function ExamDetailsView({
               {filteredStudents.map((assignedRecord) => {
                 const s = assignedRecord.student || assignedRecord;
                 const photoSrc = getBucketPublicUrl(s.photo) || s.photo;
-                const vStatus = assignedRecord.verification_status || 'unverified';
+                const vStatus = getStudentVerificationStatus(assignedRecord);
                 const incCount = studentIncidentCountMap.get(assignedRecord.student_id) || 0;
 
                 const statusStyles = {

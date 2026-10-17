@@ -71,11 +71,16 @@ This directory contains the hardware integration scripts to connect a **Raspberr
 1. Copy [`raspberry_pi_bridge.py`](file:///c:/Users/vivek/OneDrive/Desktop/ExamShield-AI/hardware/raspberry_pi_bridge.py) to your Raspberry Pi.
 2. Install Python dependencies:
    ```bash
-   pip3 install pyserial requests websocket-client
+   pip3 install pyserial requests websocket-client ultralytics opencv-python
    ```
 3. Update `EXAMSHIELD_SERVER_IP` inside [`raspberry_pi_bridge.py`](file:///c:/Users/vivek/OneDrive/Desktop/ExamShield-AI/hardware/raspberry_pi_bridge.py#L20) to your laptop/server's IP address.
-4. Run the master bridge:
+4. Copy your two model files to `hardware/models/` on the Pi (or set `EXAMSHIELD_MODEL_DIR`):
+   * `face_verification.pt`
+   * `device_detection.pt`
+5. Copy [`model_worker.py`](model_worker.py) next to the bridge and fill in the `handle_face_verification` / `handle_device_detection` hooks (face matching, incident reporting).
+6. Set the shared secret (must equal `PI_BRIDGE_KEY` in the server's `client/.env`) and run the master bridge:
    ```bash
+   export PI_BRIDGE_KEY="<same-secret-as-server>"
    python3 raspberry_pi_bridge.py
    ```
 
@@ -96,3 +101,55 @@ To stream real-time camera footage to the ExamShield Dashboard:
    mjpg_streamer -i "input_uvc.so -d /dev/video0 -r 1280x720 -f 30" -o "output_http.so -w ./www -p 8081"
    ```
 2. In [`RoverView.jsx`](file:///c:/Users/vivek/OneDrive/Desktop/ExamShield-AI/client/src/components/RoverView.jsx), point your camera stream URL to `http://<PI_IP>:8081/?action=stream`.
+
+> **Camera conflict:** `mjpg_streamer` and the model workers both open the camera. Only one process can hold `/dev/video0` at a time, so either stream from the model worker, use a second camera for the stream, or stop the streamer while a model runs.
+
+---
+
+## 🧠 AI Model Lifecycle on the Pi 4 (Face Verification → Device Detection)
+
+Both `.pt` models are deployed on the Raspberry Pi 4. The dashboard (Exam Details → *AI Model Control*) never runs a model itself; it only asks the **server**, which commands the Pi bridge over the WebSocket. **FV and DD never run at the same time** — this is enforced by the server, the Pi bridge, and the Pi's single-process-at-a-time supervisor.
+
+```
+Dashboard ──REST──► Server (scheduler + executor) ──WebSocket MODEL_COMMAND──► Pi bridge ──subprocess──► model_worker.py (.pt)
+                          ▲                                                       │
+                          └──────────── MODEL_ACK / MODEL_STATUS ◄────────────────┘
+```
+
+### Rules
+| Model | Window | Start | Stop |
+|---|---|---|---|
+| **Face Verification** | `exam start − 60 min` → `exam start` | **Manual** (Start / Restart button) | Manual, **or auto** when ① every enrolled student is `verified`, or ② exam start time is reached (force-stop) |
+| **Device Detection** | `exam start` → `exam end` | **Auto** at exam start, only after the Pi reports no model running (FV confirmed stopped) | Manual (can be restarted), **or auto** at exam end / when the exam is cancelled |
+
+* FV can be restarted any time inside its window (e.g. accidental stop). It can never be started once the exam has started.
+* Auto-stop ① requires **every** student to be `verified` — `failed`, `absent` and `unverified` students keep FV running until exam start or a manual stop.
+* If a worker crashes or the Pi reboots while FV/DD should be running, the server restarts it (retries every 10 s).
+
+### Where the automation runs
+All automatic steps (FV auto-stop, force-stop at exam start, DD auto-start, DD auto-stop) run in a **server-side scheduler** in [`server.js`](../client/server.js) (`modelSchedulerTick`, every 5 s). They work even if nobody has the dashboard open. The dashboard only shows state and sends the evaluator's manual actions.
+
+* Per-exam manual choices (FV started/stopped, DD stopped manually) are saved to `client/.model-lifecycle.json`, so a server restart does not lose them.
+* The scheduler reads `exams` and `exam_students` from Supabase. If your RLS policies block the anon key, set `SUPABASE_SERVICE_ROLE_KEY` in `client/.env` (server-side only).
+* Exams that exist only in the browser's local cache (not in Supabase) are not scheduled automatically; they are only automated after the first manual action on them.
+
+### Server setup
+Add to `client/.env` (see `client/.env.example`):
+```
+PI_BRIDGE_KEY=<shared secret, same value on the Pi>
+SUPABASE_SERVICE_ROLE_KEY=<optional, see above>
+```
+
+### API used by the dashboard
+| Endpoint | Purpose |
+|---|---|
+| `POST /api/rover/model-control` | Manual `{ examId, model: face_verification\|device_detection, action: start\|stop }` (Admin / Exam Controller / Operator) |
+| `GET /api/rover/model-status?examId=` | Pi connection, running model, and the exam's lifecycle flags (all staff roles) |
+
+### WebSocket messages (Pi ⇄ server)
+| Message | Direction | Meaning |
+|---|---|---|
+| `PI_AUTH { key }` | Pi → server | Authenticates the Pi bridge with `PI_BRIDGE_KEY` |
+| `MODEL_COMMAND { requestId, model, action, examId }` | server → Pi | Start / stop a model |
+| `MODEL_ACK { requestId, ok, error }` | Pi → server | Result of the command (stop is only acked after the process exited and the camera is released) |
+| `MODEL_STATUS { activeModel, examId, status, error }` | Pi → server | Real model state, reported every ~3 s (detects crashes) |

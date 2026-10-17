@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase.js';
+import { apiFetch } from './apiClient.js';
 
 export const EVIDENCE_BUCKET = 'incident-evidence';
 
@@ -127,6 +128,115 @@ export function calculateAuthoritativeStatus(exam) {
     return 'verification';
   }
   return 'scheduled';
+}
+
+/**
+ * Normalizes verification status across all Supabase schemas (exam_students and students table).
+ * Returns: 'verified' | 'failed' | 'absent' | 'unverified'
+ */
+export function getStudentVerificationStatus(record) {
+  if (!record) return 'unverified';
+
+  // Direct explicit verification_status (on assignedRecord or student)
+  const direct = String(record.verification_status || record.student?.verification_status || '').toLowerCase().trim();
+  if (['verified', 'failed', 'absent'].includes(direct)) {
+    return direct;
+  }
+
+  const s = record.student || record;
+  const status = String(s.status || '').toLowerCase().trim();
+  const decision = String(s.entryDecision || '').toLowerCase().trim();
+  const completed = Boolean(s.verificationCompleted || s.entryAllowed);
+
+  // 1. Check for Verified
+  if (
+    direct === 'verified' ||
+    status === 'verified' ||
+    decision === 'allowed' ||
+    decision === 'verified' ||
+    completed === true
+  ) {
+    return 'verified';
+  }
+
+  // 2. Check for Failed / Denied
+  if (
+    direct === 'failed' ||
+    status === 'failed' ||
+    status === 'flagged' ||
+    decision === 'denied' ||
+    decision === 'rejected'
+  ) {
+    return 'failed';
+  }
+
+  // 3. Check for Absent
+  if (direct === 'absent' || status === 'absent') {
+    return 'absent';
+  }
+
+  return 'unverified';
+}
+
+const FV_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * Face verification window boundaries: [start_time - 60min, start_time)
+ */
+export function getFVWindow(exam) {
+  const start = new Date(exam.start_time).getTime();
+  return { windowStart: start - FV_WINDOW_MS, windowEnd: start };
+}
+
+/** True while now is inside the face verification window. */
+export function isInFVWindow(exam, now = Date.now()) {
+  if (!exam) return false;
+  const { windowStart, windowEnd } = getFVWindow(exam);
+  return now >= windowStart && now < windowEnd;
+}
+
+/** True while now is inside the exam (device detection) window: [start_time, end_time) */
+export function isInDDWindow(exam, now = Date.now()) {
+  if (!exam) return false;
+  const start = new Date(exam.start_time).getTime();
+  const end = new Date(exam.end_time).getTime();
+  return now >= start && now < end;
+}
+
+/**
+ * Start/stop a model running on the Raspberry Pi 4.
+ * model: 'face_verification' | 'device_detection'; action: 'start' | 'stop'
+ * Throws with the server/Pi error message on failure.
+ */
+export async function sendModelControl(exam, model, action) {
+  const res = await apiFetch('/api/rover/model-control', {
+    method: 'POST',
+    body: JSON.stringify({
+      examId: exam.id,
+      model,
+      action,
+      // fallback only; the server prefers the schedule stored in the database
+      start_time: exam.start_time,
+      end_time: exam.end_time
+    })
+  });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || body.success === false) {
+    throw new Error(body.error || `Model control failed (${res.status})`);
+  }
+  return body;
+}
+
+/** Current model state reported by the Pi 4 (+ per-exam lifecycle flags). Never throws. */
+export async function getModelStatus(examId) {
+  try {
+    const qs = examId ? `?examId=${encodeURIComponent(examId)}` : '';
+    const res = await apiFetch(`/api/rover/model-status${qs}`);
+    if (!res.ok) throw new Error(String(res.status));
+    return await res.json();
+  } catch {
+    return { piConnected: false, activeModel: 'none', examId: null, status: 'stopped' };
+  }
 }
 
 /**
@@ -401,7 +511,8 @@ export async function assignStudentsToExam(examId, studentIds, examStatus = 'sch
 }
 
 /**
- * Fetches assigned students for an exam, joined with student profile details
+ * Fetches assigned students for an exam, joined with student profile details.
+ * Dynamically resolves real candidate verification status from Supabase (both exam_students and students tables).
  */
 export async function getExamStudents(examId) {
   try {
@@ -410,23 +521,56 @@ export async function getExamStudents(examId) {
       .select('*, student:students(*)')
       .eq('exam_id', examId);
 
-    if (!error && data) {
+    if (!error && Array.isArray(data) && data.length > 0) {
+      const normalized = data.map(record => ({
+        ...record,
+        verification_status: getStudentVerificationStatus(record)
+      }));
+
       // Sync cache
       const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
       const otherCached = cached.filter(s => s.exam_id !== examId);
-      saveCache(CACHE_KEY_EXAM_STUDENTS, [...otherCached, ...data]);
-      return data;
+      saveCache(CACHE_KEY_EXAM_STUDENTS, [...otherCached, ...normalized]);
+      return normalized;
     }
   } catch (err) {
     console.warn('[ExamService] Supabase getExamStudents notice:', err.message);
   }
 
+  // Fallback: If exam_students is empty or not yet assigned in Supabase, load real candidates from students table
+  try {
+    const { data: dbStudents } = await supabase
+      .from('students')
+      .select('*')
+      .order('name');
+
+    if (Array.isArray(dbStudents) && dbStudents.length > 0) {
+      const candidates = dbStudents.map(st => ({
+        exam_id: examId,
+        student_id: st.id,
+        verification_status: getStudentVerificationStatus(st),
+        verified_at: getStudentVerificationStatus(st) === 'verified' ? (st.timestamp || new Date().toISOString()) : null,
+        student: st
+      }));
+
+      const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
+      const otherCached = cached.filter(s => s.exam_id !== examId);
+      saveCache(CACHE_KEY_EXAM_STUDENTS, [...otherCached, ...candidates]);
+      return candidates;
+    }
+  } catch (err) {
+    console.warn('[ExamService] Supabase fallback students fetch notice:', err.message);
+  }
+
   const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
-  return cached.filter(s => s.exam_id === examId);
+  return cached.filter(s => s.exam_id === examId).map(record => ({
+    ...record,
+    verification_status: getStudentVerificationStatus(record)
+  }));
 }
 
 /**
- * Updates a student's verification status for a specific exam
+ * Updates a student's verification status for a specific exam and syncs with Supabase students table.
  */
 export async function updateExamStudentVerification(examId, studentId, verificationStatus) {
   if (!VERIFICATION_STATUSES.includes(verificationStatus)) {
@@ -438,14 +582,30 @@ export async function updateExamStudentVerification(examId, studentId, verificat
   try {
     await supabase
       .from('exam_students')
-      .update({
+      .upsert({
+        exam_id: examId,
+        student_id: studentId,
         verification_status: verificationStatus,
         verified_at: verifiedAt
-      })
-      .eq('exam_id', examId)
-      .eq('student_id', studentId);
+      });
   } catch (err) {
-    console.warn('[ExamService] Supabase update verification notice:', err.message);
+    console.warn('[ExamService] Supabase upsert exam_students notice:', err.message);
+  }
+
+  // Also sync students table in Supabase so status updates reflect across all views
+  try {
+    const isVerified = verificationStatus === 'verified';
+    await supabase
+      .from('students')
+      .update({
+        status: isVerified ? 'Verified' : 'Pending',
+        entryDecision: isVerified ? 'Allowed' : verificationStatus === 'failed' ? 'Denied' : 'Pending',
+        verificationCompleted: isVerified,
+        entryAllowed: isVerified
+      })
+      .eq('id', studentId);
+  } catch (err) {
+    console.warn('[ExamService] Supabase sync students table notice:', err.message);
   }
 
   // Update cache
@@ -457,7 +617,13 @@ export async function updateExamStudentVerification(examId, studentId, verificat
         return {
           ...s,
           verification_status: verificationStatus,
-          verified_at: verifiedAt
+          verified_at: verifiedAt,
+          student: s.student ? {
+            ...s.student,
+            status: verificationStatus === 'verified' ? 'Verified' : 'Pending',
+            entryDecision: verificationStatus === 'verified' ? 'Allowed' : verificationStatus === 'failed' ? 'Denied' : 'Pending',
+            verificationCompleted: verificationStatus === 'verified'
+          } : undefined
         };
       }
       return s;
@@ -575,8 +741,11 @@ export async function getEvidenceSignedUrl(pathOrUrl) {
  */
 export function subscribeToExamUpdates(callback) {
   try {
+    // Unique name per subscriber: supabase.channel() with an existing name returns the already-subscribed
+    // channel, and adding listeners to it throws, which silently disabled realtime for later screens.
+    const channelName = `examshield_exam_changes_${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel('examshield_exam_changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'exams' },
@@ -591,6 +760,11 @@ export function subscribeToExamUpdates(callback) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'device_incidents' },
         (payload) => callback && callback({ table: 'device_incidents', ...payload })
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'students' },
+        (payload) => callback && callback({ table: 'students', ...payload })
       )
       .subscribe();
 

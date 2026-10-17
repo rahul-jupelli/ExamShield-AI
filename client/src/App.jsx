@@ -48,6 +48,7 @@ import ExamManagementView from './components/ExamManagementView';
 import IncidentReviewView from './components/IncidentReviewView';
 import { fetchStudentPhotoFromSupabase } from './services/storageService';
 import { apiFetch } from './services/apiClient';
+import { subscribeToExamUpdates, getStudentVerificationStatus } from './services/examService';
 
 export default function App() {
   // 1. Authoritative Auth Session via AuthContext
@@ -319,6 +320,29 @@ export default function App() {
     if (session?.isStaff || viewMode === 'dashboard') {
       hydrateAllStates();
     }
+  }, [session, viewMode, hydrateAllStates]);
+
+  // Real-time synchronization for direct Supabase mutations (e.g. students or exam_students changes)
+  useEffect(() => {
+    if (!session?.isStaff && viewMode !== 'dashboard') return;
+
+    const unsubscribe = subscribeToExamUpdates((payload) => {
+      if (payload.table === 'students' || payload.table === 'exam_students') {
+        if (payload.new && payload.table === 'students') {
+          setStudents(prev => prev.map(s => {
+            const keyNew = String(payload.new.id || payload.new.hallTicket || '').trim().toLowerCase();
+            const keyCur = String(s.id || s.hallTicket || '').trim().toLowerCase();
+            if (keyNew && keyCur && keyNew === keyCur) {
+              return { ...s, ...payload.new };
+            }
+            return s;
+          }));
+        }
+        hydrateAllStates();
+      }
+    });
+
+    return () => unsubscribe();
   }, [session, viewMode, hydrateAllStates]);
 
   // 8. WebSocket Telemetry Client (Authenticated Staff Only)

@@ -88,7 +88,7 @@ export default function ExamManagementView({
   // Realtime subscription
   useEffect(() => {
     const unsubscribe = subscribeToExamUpdates((payload) => {
-      if (payload.table === 'exams' || payload.table === 'exam_students') {
+      if (payload.table === 'exams' || payload.table === 'exam_students' || payload.table === 'students') {
         loadExams();
       }
     });
