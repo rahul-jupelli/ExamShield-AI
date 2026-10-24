@@ -9,7 +9,6 @@ import {
   Clock
 } from 'lucide-react';
 import { getBucketPublicUrl } from '../services/storageService';
-import { getStudentVerificationStatus } from '../services/examService';
 
 export default function DashboardView({ students = [], rover = {}, alerts = [], onSelectStudent, theme = 'dark' }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,10 +27,17 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
     return Array.from(map.values());
   }, [students]);
 
-  // 1. Calculate stats from deduplicated live variables
+  // Helper: evaluate verification based strictly on the Supabase 'status' column (not using entryDecision)
+  const isStudentVerified = (s) => {
+    const target = s?.student || s;
+    const status = String(target?.status || '').toLowerCase().trim();
+    return status === 'verified';
+  };
+
+  // 1. Calculate stats from deduplicated live variables strictly based on Supabase 'status' column
   const stats = useMemo(() => {
     const total = uniqueStudents.length;
-    const verified = uniqueStudents.filter(s => getStudentVerificationStatus(s) === 'verified').length;
+    const verified = uniqueStudents.filter(isStudentVerified).length;
     const pending = total - verified;
 
     return {
@@ -45,7 +51,7 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
   const filteredStudents = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return uniqueStudents.filter(s => {
-      const isVerified = getStudentVerificationStatus(s) === 'verified';
+      const isVerified = isStudentVerified(s);
       // Category filter
       if (activeCategory === 'verified' && !isVerified) return false;
       if (activeCategory === 'pending' && isVerified) return false;
@@ -60,13 +66,13 @@ export default function DashboardView({ students = [], rover = {}, alerts = [], 
     });
   }, [uniqueStudents, searchQuery, activeCategory]);
 
-  // 3. Separate into 2 groups
+  // 3. Separate into 2 groups strictly based on Supabase 'status' column
   const { pendingGroup, verifiedGroup } = useMemo(() => {
     const pending = [];
     const verified = [];
 
     filteredStudents.forEach(s => {
-      if (getStudentVerificationStatus(s) === 'verified') {
+      if (isStudentVerified(s)) {
         verified.push(s);
       } else {
         pending.push(s);

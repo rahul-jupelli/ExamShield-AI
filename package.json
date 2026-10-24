@@ -1,6 +1,10 @@
 {
   "dependencies": {
+    "dotenv": "^18.0.8",
     "numpy": "^0.0.1",
     "torch": "^0.2.7"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
   }
 }

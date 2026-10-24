@@ -20,11 +20,16 @@ import {
   CameraOff,
   Radio,
   FileCheck2,
-  AlertOctagon
+  AlertOctagon,
+  Camera,
+  Scan,
+  QrCode
 } from 'lucide-react';
 import ExamStatusBadge from './ExamStatusBadge';
 import IncidentReviewModal from './IncidentReviewModal';
 import ModelControlPanel from './ModelControlPanel';
+import CandidateVerificationModal from './CandidateVerificationModal';
+import useModelLifecycle from '../hooks/useModelLifecycle';
 import { formatKolkata, getRelativeTime } from '../utils/timezone';
 import {
   getExamStudents,
@@ -33,7 +38,8 @@ import {
   updateIncidentReview,
   cancelExam,
   subscribeToExamUpdates,
-  getStudentVerificationStatus
+  getStudentVerificationStatus,
+  sortStudentsDeterministically
 } from '../services/examService';
 import { getBucketPublicUrl } from '../services/storageService';
 
@@ -48,10 +54,19 @@ export default function ExamDetailsView({
 }) {
   const isLight = theme === 'light';
   const isAdminOrController = ['Admin', 'Exam Controller'].includes(role);
+  const canOverrideStatus = ['Admin', 'Exam Controller', 'Operator'].includes(role);
 
   const [students, setStudents] = useState([]);
   const [incidents, setIncidents] = useState([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [updateError, setUpdateError] = useState(null);
+
+  // Per-Exam FaceNet Biometric & QR Verification Modal state
+  const [verificationModalOpen, setVerificationModalOpen] = useState(false);
+  const [modalInitialStudent, setModalInitialStudent] = useState(null);
+
+  // Authoritative Pi Model Lifecycle
+  const lc = useModelLifecycle(exam, students);
 
   // Tab: 'verification' | 'incidents'
   const [activeTab, setActiveTab] = useState('verification');
@@ -91,7 +106,10 @@ export default function ExamDetailsView({
   // Polling fallback: keeps verification status fresh even when Supabase realtime
   // is not enabled for these tables (or the websocket drops).
   useEffect(() => {
-    const t = setInterval(() => loadExamData(true), 5000);
+    const t = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      loadExamData(true);
+    }, 15000);
     return () => clearInterval(t);
   }, [loadExamData]);
 
@@ -163,24 +181,33 @@ export default function ExamDetailsView({
     });
   }, [incidents, incidentFilter]);
 
-  // Handle student status change
+  // Handle student status change with deterministic ordering and error propagation
   const handleUpdateStatus = async (studentId, nextStatus) => {
+    setUpdateError(null);
     try {
       await updateExamStudentVerification(exam.id, studentId, nextStatus);
-      setStudents(prev =>
-        prev.map(s => {
+      setStudents(prev => {
+        const nextList = prev.map(s => {
           if (s.student_id === studentId) {
             return {
               ...s,
               verification_status: nextStatus,
-              verified_at: nextStatus === 'verified' ? new Date().toISOString() : null
+              verified_at: nextStatus === 'verified' ? new Date().toISOString() : null,
+              student: s.student ? {
+                ...s.student,
+                status: nextStatus === 'verified' ? 'Verified' : 'Pending',
+                entryDecision: nextStatus === 'verified' ? 'Allowed' : nextStatus === 'failed' ? 'Denied' : 'Pending',
+                verificationCompleted: nextStatus === 'verified'
+              } : undefined
             };
           }
           return s;
-        })
-      );
+        });
+        return sortStudentsDeterministically(nextList);
+      });
     } catch (err) {
       console.error('Failed to update student verification status:', err);
+      setUpdateError(err.message || 'Failed to update student verification status.');
     }
   };
 
@@ -245,6 +272,18 @@ export default function ExamDetailsView({
           )}
         </div>
       </div>
+
+      {updateError && (
+        <div className="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+          <span className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+            <span>{updateError}</span>
+          </span>
+          <button onClick={() => setUpdateError(null)} className="text-rose-400 hover:text-white text-xs underline cursor-pointer">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {/* Main Examination Banner */}
       <div
@@ -324,7 +363,7 @@ export default function ExamDetailsView({
         </div>
       </div>
 
-      {/* SECTION 1: Hardware Rover Integration Status (Real State) */}
+      {/* SECTION 1: Hardware Rover Integration Status (Live Dynamic State) */}
       <div
         className={`p-5 rounded-3xl border transition-all ${
           isLight
@@ -334,7 +373,13 @@ export default function ExamDetailsView({
       >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-start sm:items-center gap-3.5">
-            <div className="p-3 rounded-2xl bg-slate-500/10 border border-slate-500/20 text-slate-400 shrink-0">
+            <div className={`p-3 rounded-2xl border shrink-0 ${
+              lc.piStatus.piConnected
+                ? lc.isSimulated
+                  ? 'bg-amber-500/10 border-amber-500/25 text-amber-400'
+                  : 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400'
+                : 'bg-slate-500/10 border-slate-500/20 text-slate-400'
+            }`}>
               <Cpu className="h-6 w-6" />
             </div>
             <div>
@@ -342,13 +387,33 @@ export default function ExamDetailsView({
                 <h3 className="text-sm font-bold tracking-tight">
                   Raspberry Pi 4 Inference System
                 </h3>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-slate-500/20 border border-slate-500/30 text-slate-400 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                  Standby / Disconnected
+                <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                  lc.piStatus.piConnected
+                    ? lc.isSimulated
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                      : 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                    : 'bg-slate-500/20 border-slate-500/30 text-slate-400'
+                }`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    lc.piStatus.piConnected
+                      ? lc.isSimulated
+                        ? 'bg-amber-400 animate-pulse'
+                        : 'bg-emerald-400'
+                      : 'bg-slate-400'
+                  }`} />
+                  {lc.piStatus.piConnected
+                    ? lc.isSimulated
+                      ? 'Pi Simulator (Dev)'
+                      : 'Pi 4 Online'
+                    : 'Pi Offline'}
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Live edge rover inference pipeline is not yet connected. Ready to receive YOLOv8/RF detection telemetry and frames from the Raspberry Pi 4 inference worker.
+                {lc.piStatus.piConnected
+                  ? lc.isSimulated
+                    ? 'Development Raspberry Pi 4 Simulator connected. Simulates bridge telemetry and model command execution without physical rover.'
+                    : 'Physical Raspberry Pi 4 edge inference bridge connected. Ready for active telemetry and model supervisor controls.'
+                  : 'Raspberry Pi bridge is offline. Start the development simulator (npm run simulate:pi) or connect physical hardware.'}
               </p>
             </div>
           </div>
@@ -371,6 +436,40 @@ export default function ExamDetailsView({
         theme={theme}
         canControl={role !== 'Viewer'}
       />
+
+      {/* Laptop Candidate Verification Station Launch Banner */}
+      <div className={`p-4 rounded-3xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+        isLight ? 'bg-blue-50/60 border-blue-200' : 'bg-gradient-to-r from-blue-950/40 via-[#0d1424] to-[#12192c] border-blue-900/40'
+      }`}>
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-2xl bg-blue-600/20 text-blue-400 border border-blue-500/30">
+            <QrCode className="h-6 w-6" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-white flex items-center gap-2">
+              Candidate Biometric Verification Station
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/15 border border-blue-500/30 text-blue-300">
+                {lc.fvRunning ? 'Python Runtime Live' : 'Laptop Camera + FaceNet'}
+              </span>
+            </h4>
+            <p className="text-xs text-slate-400 font-mono mt-0.5">
+              Verify enrolled candidates using candidate QR scanning and real FaceNet 512-D identity comparison. Controlled via the Python Laptop Pi Runtime.
+            </p>
+          </div>
+        </div>
+
+        <button
+          onClick={() => {
+            setModalInitialStudent(null);
+            setVerificationModalOpen(true);
+          }}
+          className="px-4 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-mono shadow-md flex items-center gap-2 cursor-pointer shrink-0 transition-colors"
+          title="Open candidate verification station"
+        >
+          <Scan className="h-4 w-4" />
+          <span>Launch Verification Station</span>
+        </button>
+      </div>
 
       {/* Navigation Sub-Tabs: Verification vs Incidents */}
       <div className="flex items-center gap-3 border-b border-slate-800 pb-2">
@@ -417,19 +516,33 @@ export default function ExamDetailsView({
         <div className="space-y-4">
           {/* Controls bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="relative flex-1 max-w-md">
-              <Search className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
-              <input
-                type="text"
-                placeholder="Search candidates by name, hall ticket, or seat..."
-                value={studentSearch}
-                onChange={(e) => setStudentSearch(e.target.value)}
-                className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
-                  isLight
-                    ? 'bg-white border-slate-300 text-slate-900'
-                    : 'bg-[#151a2d] border-slate-800 text-white placeholder-slate-500'
-                }`}
-              />
+            <div className="flex items-center gap-2 flex-1 max-w-lg">
+              <div className="relative flex-1">
+                <Search className="h-4 w-4 text-slate-400 absolute left-3 top-3" />
+                <input
+                  type="text"
+                  placeholder="Search candidates by name, hall ticket, or seat..."
+                  value={studentSearch}
+                  onChange={(e) => setStudentSearch(e.target.value)}
+                  className={`w-full pl-9 pr-3 py-2 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                    isLight
+                      ? 'bg-white border-slate-300 text-slate-900'
+                      : 'bg-[#151a2d] border-slate-800 text-white placeholder-slate-500'
+                  }`}
+                />
+              </div>
+
+              <button
+                onClick={() => {
+                  setModalInitialStudent(null);
+                  setVerificationModalOpen(true);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold font-mono shadow-sm flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                title="Scan Candidate QR Code or verify live face with FaceNet"
+              >
+                <Scan className="h-3.5 w-3.5" />
+                <span>Scan QR & Verify</span>
+              </button>
             </div>
 
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
@@ -584,9 +697,21 @@ export default function ExamDetailsView({
                     </div>
 
                     {/* Admin Status Actions */}
-                    {isAdminOrController && (
-                      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1">
-                        <span className="text-[9px] font-mono text-slate-500 uppercase">Override:</span>
+                    {canOverrideStatus && (
+                      <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-1 flex-wrap">
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setModalInitialStudent(assignedRecord);
+                              setVerificationModalOpen(true);
+                            }}
+                            title="Verify Face with Laptop Camera (FaceNet 512D)"
+                            className="px-2 py-1 rounded-lg text-[10px] font-bold font-mono bg-blue-600/20 text-blue-300 hover:bg-blue-600/30 border border-blue-500/30 flex items-center gap-1 cursor-pointer transition-colors"
+                          >
+                            <Camera className="h-3 w-3" />
+                            <span>Verify AI</span>
+                          </button>
+                        </div>
                         <div className="flex items-center gap-1">
                           <button
                             onClick={() => handleUpdateStatus(assignedRecord.student_id, 'verified')}
@@ -771,6 +896,7 @@ export default function ExamDetailsView({
           exam={exam}
           assignedStudents={students}
           theme={theme}
+          role={role}
           currentReviewer={operatorName}
           onClose={() => setSelectedIncident(null)}
           onUpdateReview={async (id, data) => {
@@ -779,6 +905,29 @@ export default function ExamDetailsView({
           }}
         />
       )}
+
+      {/* Candidate QR & FaceNet Biometric Verification Station Modal */}
+      <CandidateVerificationModal
+        isOpen={verificationModalOpen}
+        onClose={() => {
+          setVerificationModalOpen(false);
+          setModalInitialStudent(null);
+        }}
+        exam={exam}
+        students={students}
+        initialStudent={modalInitialStudent}
+        onUpdateStatus={handleUpdateStatus}
+        theme={theme}
+        piConnected={lc.piStatus.piConnected}
+        fvRunning={lc.fvRunning}
+        fvEnabled={lc.fvEnabled}
+        canToggleFV={lc.canToggleFV}
+        onToggleFaceVerification={lc.toggleFaceVerification}
+        error={lc.error}
+        busy={lc.busy}
+        fvProgress={lc.fvProgress}
+        modelPhase={lc.modelPhase}
+      />
     </div>
   );
 }

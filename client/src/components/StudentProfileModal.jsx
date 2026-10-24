@@ -80,10 +80,12 @@ export default function StudentProfileModal({
     setSubmitting(true);
     setFeedbackMsg(null);
 
+    const isAllowed = decision === 'Allowed';
     const updateFields = {
       entryDecision: decision,
-      entryAllowed: decision === 'Allowed',
-      status: decision === 'Allowed' ? 'Verified' : 'Pending'
+      entryAllowed: isAllowed,
+      status: isAllowed ? 'Verified' : 'Flagged',
+      verificationCompleted: isAllowed
     };
 
     // 1. Optimistic UI update
@@ -110,8 +112,8 @@ export default function StudentProfileModal({
       }
 
       setFeedbackMsg({
-        type: decision === 'Allowed' ? 'success' : 'danger',
-        text: decision === 'Allowed' 
+        type: isAllowed ? 'success' : 'danger',
+        text: isAllowed 
           ? `ENTRANCE APPROVED: Clear access granted for ${localStudent.name}.`
           : `ENTRANCE DENIED: Access revoked for ${localStudent.name} (Status: Device Intercept).`
       });
@@ -207,10 +209,13 @@ export default function StudentProfileModal({
               </div>
 
               <div className={`absolute bottom-3 left-3 right-3 text-center py-1 rounded text-[9px] font-bold font-mono uppercase border tracking-wider ${
-                localStudent.status === 'Pending' ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
-                'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                String(localStudent.status || '').toLowerCase().trim() === 'verified'
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                  : 'bg-amber-500/20 text-amber-300 border-amber-500/30'
               }`}>
-                {localStudent.status === 'Pending' ? 'Verification Pending' : 'Verified Student'}
+                {String(localStudent.status || '').toLowerCase().trim() === 'verified'
+                  ? 'Verified Student'
+                  : 'Verification Pending'}
               </div>
             </div>
 
@@ -218,33 +223,35 @@ export default function StudentProfileModal({
             <div className="flex-1 flex flex-col justify-between">
               <div>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <h2 className="text-2xl font-extrabold text-white leading-none font-sans">{localStudent.name}</h2>
-                  <span className="text-xs font-mono text-cyan-400 font-bold bg-cyan-950/40 px-2 py-0.5 rounded border border-cyan-800/30">
+                  <h2 className={`text-2xl font-extrabold leading-none font-sans ${isLight ? 'text-slate-900' : 'text-white'}`}>{localStudent.name}</h2>
+                  <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded border ${
+                    isLight ? 'text-blue-700 bg-blue-50 border-blue-200' : 'text-cyan-400 bg-cyan-950/40 border-cyan-800/30'
+                  }`}>
                     {localStudent.hallTicket}
                   </span>
                 </div>
                 
-                <p className="text-slate-400 text-sm mt-1">{localStudent.branch} · Semester VI</p>
+                <p className={`text-sm mt-1 ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>{localStudent.branch} · Semester VI</p>
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-4">
-                  <div className="p-3 rounded-xl bg-[#010409] border border-blue-900/20 text-xs">
+                  <div className={`p-3 rounded-xl border text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#010409] border-blue-900/20'}`}>
                     <span className="block text-slate-500 font-mono text-[10px] uppercase">Exam Room</span>
-                    <span className="block font-bold text-white mt-1">{localStudent.room}</span>
+                    <span className={`block font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{localStudent.room}</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#010409] border border-blue-900/20 text-xs">
+                  <div className={`p-3 rounded-xl border text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#010409] border-blue-900/20'}`}>
                     <span className="block text-slate-500 font-mono text-[10px] uppercase">Seat Index</span>
-                    <span className="block font-bold text-white mt-1">{localStudent.seat}</span>
+                    <span className={`block font-bold mt-1 ${isLight ? 'text-slate-900' : 'text-white'}`}>{localStudent.seat}</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#010409] border border-blue-900/20 text-xs">
+                  <div className={`p-3 rounded-xl border text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#010409] border-blue-900/20'}`}>
                     <span className="block text-slate-500 font-mono text-[10px] uppercase">Face Confidence</span>
-                    <span className="block font-bold text-emerald-400 mt-1">{localStudent.faceConfidence || 99}% Match</span>
+                    <span className="block font-bold text-emerald-500 mt-1">{localStudent.faceConfidence || 99}% Match</span>
                   </div>
-                  <div className="p-3 rounded-xl bg-[#010409] border border-blue-900/20 text-xs">
+                  <div className={`p-3 rounded-xl border text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#010409] border-blue-900/20'}`}>
                     <span className="block text-slate-500 font-mono text-[10px] uppercase">Entry decision</span>
                     <span className={`block font-bold mt-1 ${
-                      localStudent.entryDecision === 'Allowed' ? 'text-emerald-400' :
-                      localStudent.entryDecision === 'Denied' ? 'text-rose-400' :
-                      'text-amber-400'
+                      localStudent.entryDecision === 'Allowed' ? 'text-emerald-500' :
+                      localStudent.entryDecision === 'Denied' ? 'text-rose-500' :
+                      'text-amber-500'
                     }`}>{localStudent.entryDecision || 'Pending'}</span>
                   </div>
                 </div>
@@ -326,45 +333,45 @@ export default function StudentProfileModal({
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider">Student Academic Record</h3>
-                <div className="rounded-2xl border border-blue-900/20 bg-[#010409]/40 p-4 space-y-3 text-xs">
-                  <div className="flex justify-between py-1.5 border-b border-blue-900/20">
+                <h3 className={`text-xs font-bold font-mono uppercase tracking-wider ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Student Academic Record</h3>
+                <div className={`rounded-2xl border p-4 space-y-3 text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#010409]/40 border-blue-900/20'}`}>
+                  <div className={`flex justify-between py-1.5 border-b ${isLight ? 'border-slate-200' : 'border-blue-900/20'}`}>
                     <span className="text-slate-500">Degree Course</span>
-                    <span className="text-slate-300 font-semibold">Bachelor of Technology</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>Bachelor of Technology</span>
                   </div>
-                  <div className="flex justify-between py-1.5 border-b border-blue-900/20">
+                  <div className={`flex justify-between py-1.5 border-b ${isLight ? 'border-slate-200' : 'border-blue-900/20'}`}>
                     <span className="text-slate-500">Academic Year</span>
-                    <span className="text-slate-300 font-semibold">Third Year (Semester VI)</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>Third Year (Semester VI)</span>
                   </div>
-                  <div className="flex justify-between py-1.5 border-b border-blue-900/20">
+                  <div className={`flex justify-between py-1.5 border-b ${isLight ? 'border-slate-200' : 'border-blue-900/20'}`}>
                     <span className="text-slate-500">Exam Name</span>
-                    <span className="text-slate-300 font-semibold">Design & Analysis of Algorithms</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>Design & Analysis of Algorithms</span>
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-slate-500">RFID SmartCard ID</span>
-                    <span className="text-slate-300 font-mono">#RFID-942-B-405</span>
+                    <span className={`font-mono ${isLight ? 'text-slate-700' : 'text-slate-300'}`}>#RFID-942-B-405</span>
                   </div>
                 </div>
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-xs font-bold font-mono text-slate-400 uppercase tracking-wider">Exam Hall Placement</h3>
-                <div className="rounded-2xl border border-blue-900/20 bg-[#010409]/40 p-4 space-y-3 text-xs">
-                  <div className="flex justify-between py-1.5 border-b border-blue-900/20">
+                <h3 className={`text-xs font-bold font-mono uppercase tracking-wider ${isLight ? 'text-slate-600' : 'text-slate-400'}`}>Exam Hall Placement</h3>
+                <div className={`rounded-2xl border p-4 space-y-3 text-xs ${isLight ? 'bg-slate-50 border-slate-200' : 'bg-[#010409]/40 border-blue-900/20'}`}>
+                  <div className={`flex justify-between py-1.5 border-b ${isLight ? 'border-slate-200' : 'border-blue-900/20'}`}>
                     <span className="text-slate-500">Assigned Hall Room</span>
-                    <span className="text-slate-300 font-semibold">{student.room}</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>{localStudent.room}</span>
                   </div>
-                  <div className="flex justify-between py-1.5 border-b border-blue-900/20">
+                  <div className={`flex justify-between py-1.5 border-b ${isLight ? 'border-slate-200' : 'border-blue-900/20'}`}>
                     <span className="text-slate-500">Desk Row Seat</span>
-                    <span className="text-slate-300 font-semibold">{student.seat}</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>{localStudent.seat}</span>
                   </div>
-                  <div className="flex justify-between py-1.5 border-b border-blue-900/20">
+                  <div className={`flex justify-between py-1.5 border-b ${isLight ? 'border-slate-200' : 'border-blue-900/20'}`}>
                     <span className="text-slate-500">Scheduled Exam Hour</span>
-                    <span className="text-slate-300 font-semibold">10:00 AM - 01:00 PM</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>10:00 AM - 01:00 PM</span>
                   </div>
                   <div className="flex justify-between py-1.5">
                     <span className="text-slate-500">Proctor In-Charge</span>
-                    <span className="text-slate-300 font-semibold">Dr. A. K. Sastri</span>
+                    <span className={isLight ? 'text-slate-800 font-semibold' : 'text-slate-300 font-semibold'}>Dr. A. K. Sastri</span>
                   </div>
                 </div>
               </div>
@@ -572,9 +579,11 @@ export default function StudentProfileModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-6 py-4.5 border-t border-blue-900/30 bg-slate-950/80 flex items-center justify-between text-xs text-slate-500 font-mono">
+        <div className={`px-6 py-4 border-t flex items-center justify-between text-xs font-mono ${
+          isLight ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-slate-950/80 border-blue-900/30 text-slate-500'
+        }`}>
           <span>OPERATOR TERMINAL SYSTEM v2.84</span>
-          <span>DATE QUERY: 2026-07-21</span>
+          <span>DATE QUERY: {new Date().toISOString().split('T')[0]}</span>
         </div>
 
       </div>

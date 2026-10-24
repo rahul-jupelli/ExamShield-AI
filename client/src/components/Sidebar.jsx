@@ -45,7 +45,7 @@ export default function Sidebar({
     { id: 'alerts', label: 'Active Alerts', icon: AlertTriangle, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'], badgeCount: true },
     { id: 'reports', label: 'Incident Reports', icon: FileText, roles: ['Admin', 'Exam Controller', 'Operator'] },
     { id: 'analytics', label: 'Exam Analytics', icon: BarChart3, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
-    { id: 'health', label: 'System Health', icon: Activity, roles: ['Admin', 'Exam Controller', 'Viewer'] },
+    { id: 'health', label: 'System Health', icon: Activity, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
     { id: 'history', label: 'AI Frame History', icon: History, roles: ['Admin', 'Exam Controller', 'Operator', 'Viewer'] },
     { id: 'settings', label: 'System Configuration', icon: Settings, roles: ['Admin', 'Exam Controller'] },
   ];

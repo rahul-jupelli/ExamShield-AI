@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from '../lib/supabase.js';
 
 /**
  * Returns the current active Supabase session access token.
@@ -29,7 +29,11 @@ export async function apiFetch(url, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const response = await fetch(url, {
+  const resolvedUrl = typeof window === 'undefined' && url.startsWith('/')
+    ? `http://localhost:${(typeof process !== 'undefined' && process.env?.PORT) || 3000}${url}`
+    : url;
+
+  const response = await fetch(resolvedUrl, {
     ...options,
     headers,
   });

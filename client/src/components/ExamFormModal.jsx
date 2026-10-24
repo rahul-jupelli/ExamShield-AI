@@ -53,6 +53,27 @@ export default function ExamFormModal({
   // Selected student IDs (Set)
   const [selectedStudentIds, setSelectedStudentIds] = useState(() => new Set(assignedStudentIds));
 
+  // Sync state if exam or assignedStudentIds prop changes
+  useEffect(() => {
+    if (exam) {
+      setExamName(exam.exam_name || '');
+      setRoom(exam.room || examHalls[0] || 'LH-302');
+      if (exam.start_time) {
+        const start = isoToKolkataInputs(exam.start_time);
+        setExamDate(start.date);
+        setStartTime(start.time);
+      }
+      if (exam.end_time) {
+        const end = isoToKolkataInputs(exam.end_time);
+        setEndTime(end.time);
+      }
+    }
+  }, [exam, examHalls]);
+
+  useEffect(() => {
+    setSelectedStudentIds(new Set(assignedStudentIds || []));
+  }, [assignedStudentIds]);
+
   // Student filter and search state
   const [studentSearch, setStudentSearch] = useState('');
   const [branchFilter, setBranchFilter] = useState('ALL');

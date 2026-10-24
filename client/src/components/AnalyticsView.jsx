@@ -17,14 +17,44 @@ import {
 import { BarChart3, TrendingUp, AlertTriangle, Zap, CheckCircle } from 'lucide-react';
 import GlassCard from './GlassCard';
 
-export default function AnalyticsView({ theme = 'dark' }) {
+export default function AnalyticsView({ students = [], metrics, theme = 'dark' }) {
   const isLight = theme === 'light';
 
-  // 1. Data: Student verified vs flagged
-  const verificationData = [
-    { name: 'Verified', value: 142, color: '#10b981' },
-    { name: 'Pending', value: 16, color: '#f59e0b' },
-  ];
+  // 1. Data: Student verified vs flagged computed dynamically
+  const { verificationData, totalStudents, verifiedCount, clearancePercent } = React.useMemo(() => {
+    let verified = 0;
+    let pending = 0;
+    if (students && students.length > 0) {
+      students.forEach(s => {
+        const st = String(s.status || '').toLowerCase().trim();
+        if (st === 'verified' || s.entryDecision === 'Allowed') {
+          verified++;
+        } else {
+          pending++;
+        }
+      });
+      const total = verified + pending;
+      const pct = total > 0 ? ((verified / total) * 100).toFixed(1) : '100.0';
+      return {
+        verificationData: [
+          { name: 'Verified', value: verified, color: '#10b981' },
+          { name: 'Pending / Flagged', value: pending, color: '#f59e0b' },
+        ],
+        totalStudents: total,
+        verifiedCount: verified,
+        clearancePercent: `${pct}%`,
+      };
+    }
+    return {
+      verificationData: [
+        { name: 'Verified', value: 142, color: '#10b981' },
+        { name: 'Pending / Flagged', value: 16, color: '#f59e0b' },
+      ],
+      totalStudents: 158,
+      verifiedCount: 142,
+      clearancePercent: '94.2%',
+    };
+  }, [students]);
 
   // 2. Data: Device Types Detected
   const deviceTypeData = [
@@ -87,8 +117,8 @@ export default function AnalyticsView({ theme = 'dark' }) {
           </div>
           <div>
             <span className={`block text-xs font-mono font-bold uppercase ${isLight ? 'text-slate-500' : 'text-slate-400'}`}>Overall Clearance</span>
-            <span className={`text-2xl font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>94.2%</span>
-            <span className="block text-[10px] text-emerald-500 font-semibold mt-0.5">142 verified gate passes</span>
+            <span className={`text-2xl font-extrabold ${isLight ? 'text-slate-900' : 'text-white'}`}>{clearancePercent}</span>
+            <span className="block text-[10px] text-emerald-500 font-semibold mt-0.5">{verifiedCount} of {totalStudents} verified gate passes</span>
           </div>
         </GlassCard>
 

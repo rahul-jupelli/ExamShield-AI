@@ -21,7 +21,7 @@ const TAB_PERMISSIONS = {
   'rover': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
   'alerts': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
   'analytics': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
-  'health': ['Admin', 'Exam Controller', 'Viewer'],
+  'health': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
   'history': ['Admin', 'Exam Controller', 'Operator', 'Viewer'],
   'incident-review': ['Admin', 'Exam Controller', 'Operator'],
   'add-student': ['Admin', 'Exam Controller', 'Operator'],
@@ -48,7 +48,7 @@ import ExamManagementView from './components/ExamManagementView';
 import IncidentReviewView from './components/IncidentReviewView';
 import { fetchStudentPhotoFromSupabase } from './services/storageService';
 import { apiFetch } from './services/apiClient';
-import { subscribeToExamUpdates, getStudentVerificationStatus } from './services/examService';
+import { subscribeToExamUpdates } from './services/examService';
 
 export default function App() {
   // 1. Authoritative Auth Session via AuthContext
@@ -349,20 +349,23 @@ export default function App() {
   useEffect(() => {
     if (!session?.isStaff) return;
 
+    let isMounted = true;
+    let reconnectTimeout = null;
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-    let reconnectTimeout;
-
     const connectWS = () => {
+      if (!isMounted) return;
       const socket = new WebSocket(wsUrl);
       socketRef.current = socket;
 
       socket.onopen = async () => {
+        if (!isMounted) return;
         try {
           const { data } = await supabase.auth.getSession();
           const token = data?.session?.access_token;
-          if (token) {
+          if (token && socket.readyState === WebSocket.OPEN) {
             socket.send(JSON.stringify({ type: 'AUTH', token }));
           }
         } catch (e) {
@@ -371,6 +374,7 @@ export default function App() {
       };
 
       socket.onmessage = (event) => {
+        if (!isMounted) return;
         try {
           const data = JSON.parse(event.data);
 
@@ -398,6 +402,23 @@ export default function App() {
               break;
             case 'METRICS_UPDATE':
               setMetrics(data.metrics);
+              break;
+            case 'STUDENT_VERIFICATION_UPDATED':
+              if (data.studentId) {
+                setStudents(prev => prev.map(s => {
+                  if (s.id === data.studentId) {
+                    const isVerified = data.verification_status === 'verified';
+                    return {
+                      ...s,
+                      status: isVerified ? 'Verified' : data.verification_status === 'failed' ? 'Flagged' : s.status,
+                      entryDecision: isVerified ? 'Allowed' : data.verification_status === 'failed' ? 'Denied' : s.entryDecision,
+                      verificationCompleted: isVerified,
+                      entryAllowed: isVerified
+                    };
+                  }
+                  return s;
+                }));
+              }
               break;
             case 'STUDENT_ADDED':
               setStudents(prev => {
@@ -428,13 +449,19 @@ export default function App() {
       };
 
       socket.onclose = () => {
+        if (!isMounted) return;
         setWsConnected(false);
         console.warn('ExamShield Telemetry Link lost. Scheduling reconnect...');
-        reconnectTimeout = setTimeout(connectWS, 5000);
+        reconnectTimeout = setTimeout(() => {
+          if (isMounted) connectWS();
+        }, 5000);
       };
 
       socket.onerror = () => {
-        socket.close();
+        if (!isMounted) return;
+        try {
+          socket.close();
+        } catch (e) {}
       };
     };
 
@@ -442,15 +469,24 @@ export default function App() {
 
     // Resilient periodic sync to ensure live monitoring is always up to date
     const pollingInterval = setInterval(() => {
-      hydrateAllStates();
+      if (isMounted) hydrateAllStates();
     }, 8000);
 
     return () => {
-      if (socketRef.current) {
-        socketRef.current.close();
+      isMounted = false;
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = null;
       }
-      clearTimeout(reconnectTimeout);
       clearInterval(pollingInterval);
+      if (socketRef.current) {
+        socketRef.current.onclose = null;
+        socketRef.current.onerror = null;
+        try {
+          socketRef.current.close();
+        } catch (e) {}
+        socketRef.current = null;
+      }
     };
   }, [session, playBeep, hydrateAllStates]);
 
@@ -918,7 +954,7 @@ export default function App() {
           />
         );
       case 'analytics':
-        return <AnalyticsView theme={theme} />;
+        return <AnalyticsView students={students} metrics={metrics} theme={theme} />;
       case 'health':
         return <HealthView metrics={metrics} theme={theme} />;
       case 'history':
@@ -1019,12 +1055,14 @@ export default function App() {
           theme={theme}
           onClose={() => setSelectedStudent(null)}
           onUpdateDecision={(sId, dec, fields) => {
+            const isAllowed = dec === 'Allowed';
             setStudents(prev => prev.map(s => s.id === sId ? {
               ...s,
               ...fields,
               entryDecision: dec,
-              status: dec === 'Allowed' ? 'Verified' : 'Pending',
-              entryAllowed: dec === 'Allowed'
+              entryAllowed: isAllowed,
+              status: isAllowed ? 'Verified' : 'Flagged',
+              verificationCompleted: isAllowed,
             } : s));
           }}
         />

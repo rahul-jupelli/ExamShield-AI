@@ -34,6 +34,7 @@ export default function IncidentReviewModal({
   const [loadingUrls, setLoadingUrls] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [zoomImage, setZoomImage] = useState(null);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // Resolve signed URLs for all evidence images
   useEffect(() => {
@@ -68,6 +69,7 @@ export default function IncidentReviewModal({
   const handleDecision = async (reviewStatus) => {
     if (isSubmitting || !canReview) return;
     setIsSubmitting(true);
+    setErrorMsg('');
     try {
       await onUpdateReview(incident.id, {
         review_status: reviewStatus,
@@ -77,6 +79,7 @@ export default function IncidentReviewModal({
       onClose();
     } catch (err) {
       console.error('Failed to update incident review:', err);
+      setErrorMsg(err.message || 'Failed to save review decision to database.');
     } finally {
       setIsSubmitting(false);
     }
@@ -122,6 +125,14 @@ export default function IncidentReviewModal({
             <X className="h-5 w-5" />
           </button>
         </div>
+
+        {/* Error Notification */}
+        {errorMsg && (
+          <div className="mx-6 mt-4 p-3 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0 mt-0.5" />
+            <span className="leading-relaxed">{errorMsg}</span>
+          </div>
+        )}
 
         {/* Modal Body */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">

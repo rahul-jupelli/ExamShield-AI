@@ -54,42 +54,37 @@ export default function ExamManagementView({
   const [editingExam, setEditingExam] = useState(null);
   const [editingAssignedIds, setEditingAssignedIds] = useState([]);
 
-  // Fetch all exams
-  const loadExams = useCallback(async () => {
-    setLoading(true);
+  // Fetch all exams (supports silent background refresh without blanking UI)
+  const loadExams = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const data = await getExams();
       setExams(data || []);
 
-      // Load student counts per exam
+      // Extract batched student counts directly (eliminating N+1 sequential fetches)
       if (Array.isArray(data)) {
         const counts = {};
         for (const e of data) {
-          try {
-            const assigned = await getExamStudents(e.id);
-            counts[e.id] = assigned?.length || 0;
-          } catch {
-            counts[e.id] = 0;
-          }
+          counts[e.id] = typeof e.student_count === 'number' ? e.student_count : (counts[e.id] || 0);
         }
-        setExamStudentCounts(counts);
+        setExamStudentCounts(prev => ({ ...prev, ...counts }));
       }
     } catch (err) {
       console.warn('Error loading exams:', err);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadExams();
+    loadExams(false);
   }, [loadExams]);
 
-  // Realtime subscription
+  // Realtime subscription: updates data silently in the background
   useEffect(() => {
     const unsubscribe = subscribeToExamUpdates((payload) => {
       if (payload.table === 'exams' || payload.table === 'exam_students' || payload.table === 'students') {
-        loadExams();
+        loadExams(true);
       }
     });
     return () => unsubscribe();

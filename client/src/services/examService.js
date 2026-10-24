@@ -6,82 +6,27 @@ export const EVIDENCE_BUCKET = 'incident-evidence';
 // Valid status constraints according to specification
 export const EXAM_STATUSES = ['scheduled', 'verification', 'device_detection', 'completed', 'cancelled'];
 export const VERIFICATION_STATUSES = ['unverified', 'verified', 'failed', 'absent'];
-export const REVIEW_STATUSES = ['pending', 'confirmed', 'dismissed'];
+export const REVIEW_STATUSES = ['pending', 'confirmed', 'dismissed', 'approved', 'rejected'];
 
-// Local storage cache keys for offline tolerance / before migration execution
+/**
+ * Normalizes review status aliases so both ('confirmed', 'dismissed') and ('approved', 'rejected') work seamlessly.
+ */
+export function normalizeReviewStatus(status) {
+  const s = String(status || '').toLowerCase().trim();
+  if (s === 'approved' || s === 'confirmed') return 'confirmed';
+  if (s === 'rejected' || s === 'dismissed') return 'dismissed';
+  if (s === 'pending') return 'pending';
+  return status;
+}
+
+// Local storage cache keys for caching actual records (no fake seed data)
 const CACHE_KEY_EXAMS = 'examshield_exams_cache_v1';
 const CACHE_KEY_EXAM_STUDENTS = 'examshield_exam_students_cache_v1';
 const CACHE_KEY_INCIDENTS = 'examshield_device_incidents_cache_v1';
 
-/**
- * Seed initial sample exam and incidents if storage is completely empty
- */
-function getInitialSeedData() {
-  const now = new Date();
-  // Exam starting in 45 minutes (in verification phase)
-  const startTime = new Date(now.getTime() + 45 * 60 * 1000).toISOString();
-  const endTime = new Date(now.getTime() + 165 * 60 * 1000).toISOString();
-
-  const seedExam = {
-    id: 'exam-seed-101',
-    exam_name: 'Advanced Operating Systems Final Examination (CS-402)',
-    start_time: startTime,
-    end_time: endTime,
-    status: 'verification',
-    room: 'LH-302',
-    created_at: new Date(now.getTime() - 2 * 3600 * 1000).toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  const seedExamStudents = [
-    { exam_id: 'exam-seed-101', student_id: 's1', verification_status: 'unverified', verified_at: null },
-    { exam_id: 'exam-seed-101', student_id: 's2', verification_status: 'verified', verified_at: new Date().toISOString() },
-    { exam_id: 'exam-seed-101', student_id: 's3', verification_status: 'unverified', verified_at: null },
-    { exam_id: 'exam-seed-101', student_id: 's5', verification_status: 'verified', verified_at: new Date().toISOString() },
-    { exam_id: 'exam-seed-101', student_id: 's6', verification_status: 'unverified', verified_at: null },
-  ];
-
-  const seedIncidents = [
-    {
-      id: 'inc-seed-201',
-      exam_id: 'exam-seed-101',
-      detected_class: 'Smart Watch (v4.2 Active RF)',
-      confidence: 0.945,
-      qualifying_frames: 20,
-      student_id: 's1',
-      review_status: 'pending',
-      evidence_paths: [
-        'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&auto=format&fit=crop&q=80',
-        'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=600&auto=format&fit=crop&q=80'
-      ],
-      evidence_complete: true,
-      reviewed_by: null,
-      reviewed_at: null,
-      created_at: new Date(now.getTime() - 15 * 60 * 1000).toISOString()
-    },
-    {
-      id: 'inc-seed-202',
-      exam_id: 'exam-seed-101',
-      detected_class: 'Concealed Bluetooth Micro-Earbud',
-      confidence: 0.887,
-      qualifying_frames: 12,
-      student_id: 's2',
-      review_status: 'pending',
-      evidence_paths: [
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80'
-      ],
-      evidence_complete: false, // Incomplete evidence (< 20 frames before timeout)
-      reviewed_by: null,
-      reviewed_at: null,
-      created_at: new Date(now.getTime() - 8 * 60 * 1000).toISOString()
-    }
-  ];
-
-  return { seedExam, seedExamStudents, seedIncidents };
-}
-
 function loadCache(key, fallback = []) {
   try {
+    if (typeof localStorage === 'undefined') return fallback;
     const raw = localStorage.getItem(key);
     if (!raw) return fallback;
     return JSON.parse(raw);
@@ -92,6 +37,7 @@ function loadCache(key, fallback = []) {
 
 function saveCache(key, data) {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(key, JSON.stringify(data));
   } catch (e) {
     console.warn('[ExamService] Cache save error:', e);
@@ -133,48 +79,36 @@ export function calculateAuthoritativeStatus(exam) {
 /**
  * Normalizes verification status across all Supabase schemas (exam_students and students table).
  * Returns: 'verified' | 'failed' | 'absent' | 'unverified'
+ * Based strictly on the status / verification_status column in Supabase (not using entryDecision).
  */
 export function getStudentVerificationStatus(record) {
   if (!record) return 'unverified';
 
   // Direct explicit verification_status (on assignedRecord or student)
   const direct = String(record.verification_status || record.student?.verification_status || '').toLowerCase().trim();
-  if (['verified', 'failed', 'absent'].includes(direct)) {
+  if (['verified', 'failed', 'absent', 'unverified'].includes(direct)) {
     return direct;
   }
 
   const s = record.student || record;
   const status = String(s.status || '').toLowerCase().trim();
-  const decision = String(s.entryDecision || '').toLowerCase().trim();
-  const completed = Boolean(s.verificationCompleted || s.entryAllowed);
 
-  // 1. Check for Verified
-  if (
-    direct === 'verified' ||
-    status === 'verified' ||
-    decision === 'allowed' ||
-    decision === 'verified' ||
-    completed === true
-  ) {
+  // 1. Check for Verified based strictly on status column
+  if (status === 'verified') {
     return 'verified';
   }
 
-  // 2. Check for Failed / Denied
-  if (
-    direct === 'failed' ||
-    status === 'failed' ||
-    status === 'flagged' ||
-    decision === 'denied' ||
-    decision === 'rejected'
-  ) {
+  // 2. Check for Failed / Flagged
+  if (status === 'failed' || status === 'flagged') {
     return 'failed';
   }
 
   // 3. Check for Absent
-  if (direct === 'absent' || status === 'absent') {
+  if (status === 'absent') {
     return 'absent';
   }
 
+  // 4. Default: Verification pending / unverified
   return 'unverified';
 }
 
@@ -208,13 +142,15 @@ export function isInDDWindow(exam, now = Date.now()) {
  * model: 'face_verification' | 'device_detection'; action: 'start' | 'stop'
  * Throws with the server/Pi error message on failure.
  */
-export async function sendModelControl(exam, model, action) {
+export async function sendModelControl(exam, model, action, options = {}) {
+  const switchModel = Boolean(exam?.switchModel || options?.switchModel);
   const res = await apiFetch('/api/rover/model-control', {
     method: 'POST',
     body: JSON.stringify({
       examId: exam.id,
       model,
       action,
+      switchModel,
       // fallback only; the server prefers the schedule stored in the database
       start_time: exam.start_time,
       end_time: exam.end_time
@@ -240,33 +176,47 @@ export async function getModelStatus(examId) {
 }
 
 /**
- * Fetches all exams from Supabase with fallback to local cache
+ * Fetches all exams from Express API (with Supabase fallback)
  */
 export async function getExams() {
+  let backendError = null;
+  try {
+    const res = await apiFetch('/api/exams');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        saveCache(CACHE_KEY_EXAMS, data);
+        return data;
+      }
+    } else {
+      const body = await res.json().catch(() => ({}));
+      backendError = new Error(body.error || `Server responded with status ${res.status}`);
+    }
+  } catch (err) {
+    backendError = err;
+    if (err.status === 401 || err.status === 403) throw err;
+  }
+
+  // Supabase fallback query with active session credentials
   try {
     const { data, error } = await supabase
       .from('exams')
       .select('*')
       .order('start_time', { ascending: true });
 
-    if (!error && data) {
+    if (!error && Array.isArray(data)) {
       saveCache(CACHE_KEY_EXAMS, data);
       return data;
     }
+    if (error) {
+      throw new Error(error.message || backendError?.message || 'Failed to load exams.');
+    }
   } catch (err) {
-    console.warn('[ExamService] Supabase fetch exams notice:', err.message);
+    console.error('[ExamService] Failed to load exams:', err);
+    throw backendError || err;
   }
 
-  // Fallback to cache or seed
-  let cached = loadCache(CACHE_KEY_EXAMS, null);
-  if (!cached || cached.length === 0) {
-    const { seedExam, seedExamStudents, seedIncidents } = getInitialSeedData();
-    cached = [seedExam];
-    saveCache(CACHE_KEY_EXAMS, cached);
-    saveCache(CACHE_KEY_EXAM_STUDENTS, seedExamStudents);
-    saveCache(CACHE_KEY_INCIDENTS, seedIncidents);
-  }
-  return cached;
+  return [];
 }
 
 /**
@@ -285,12 +235,12 @@ export async function getExamById(id) {
     console.warn('[ExamService] Supabase getExamById notice:', err.message);
   }
 
-  const cached = loadCache(CACHE_KEY_EXAMS, []);
-  return cached.find(e => e.id === id) || null;
+  const all = await getExams();
+  return all.find(e => e.id === id) || null;
 }
 
 /**
- * Creates a new exam and assigns students
+ * Creates a new exam and assigns students via backend API (with Supabase fallback)
  */
 export async function createExam(examData, studentIds = []) {
   if (!examData.exam_name?.trim()) {
@@ -306,67 +256,95 @@ export async function createExam(examData, studentIds = []) {
   }
 
   // Conflict check for same room / rover
-  const existingExams = await getExams();
-  const hasConflict = existingExams.some(e => {
-    if (e.status === 'cancelled') return false;
-    if (e.room !== (examData.room || 'LH-302')) return false;
-    const eStart = new Date(e.start_time).getTime();
-    const eEnd = new Date(e.end_time).getTime();
-    // Overlapping condition: start < eEnd and end > eStart
-    return start < eEnd && end > eStart;
-  });
+  try {
+    const existingExams = await getExams();
+    const hasConflict = existingExams.some(e => {
+      if (e.status === 'cancelled') return false;
+      if (e.room && examData.room && e.room !== examData.room) return false;
+      const eStart = new Date(e.start_time).getTime();
+      const eEnd = new Date(e.end_time).getTime();
+      return start < eEnd && end > eStart;
+    });
 
-  if (hasConflict) {
-    throw new Error(`Schedule conflict: Exam room/rover (${examData.room || 'LH-302'}) is already scheduled for another active exam during this time slot.`);
+    if (hasConflict) {
+      throw new Error(`Schedule conflict: Exam room (${examData.room || 'LH-302'}) is already scheduled for another active exam during this time slot.`);
+    }
+  } catch (err) {
+    if (err.message.includes('Schedule conflict')) throw err;
+    console.warn('[ExamService] Conflict check notice:', err.message);
   }
 
   const initialStatus = calculateAuthoritativeStatus(examData);
-
-  const newExamRecord = {
-    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'exam-' + Date.now(),
+  const examPayload = {
     exam_name: examData.exam_name.trim(),
     start_time: examData.start_time,
     end_time: examData.end_time,
     status: initialStatus,
-    room: examData.room || 'LH-302',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
+    room: examData.room || 'LH-302'
   };
 
-  // 1. Try Supabase insert
-  let createdExam = null;
+  // 1. Prefer Express API endpoint
+  let apiError = null;
   try {
-    const { data, error } = await supabase
+    const res = await apiFetch('/api/exams', {
+      method: 'POST',
+      body: JSON.stringify({ exam: examPayload, student_ids: studentIds })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.success && body.exam) {
+      const cachedExams = loadCache(CACHE_KEY_EXAMS, []);
+      saveCache(CACHE_KEY_EXAMS, [body.exam, ...cachedExams.filter(e => e.id !== body.exam.id)]);
+      return body.exam;
+    }
+    apiError = new Error(body.error || `Server responded with ${res.status}`);
+  } catch (err) {
+    apiError = err;
+    if (err.status === 401 || err.status === 403) throw err;
+  }
+
+  // 2. Direct Supabase fallback
+  try {
+    let insertRecord = { ...examPayload };
+    let { data, error } = await supabase
       .from('exams')
-      .insert([newExamRecord])
+      .insert([insertRecord])
       .select()
       .single();
 
-    if (!error && data) {
-      createdExam = data;
+    // If 'room' column doesn't exist in the database schema (PostgreSQL error 42703), retry without it
+    if (error && (error.code === '42703' || String(error.message).includes('room'))) {
+      const { room: _omittedRoom, ...withoutRoom } = insertRecord;
+      const retry = await supabase
+        .from('exams')
+        .insert([withoutRoom])
+        .select()
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      data = { ...retry.data, room: examPayload.room };
+      error = null;
     }
+
+    if (error) {
+      throw new Error(error.message || apiError?.message || 'Failed to create exam in database.');
+    }
+
+    const createdExam = data;
+    const cachedExams = loadCache(CACHE_KEY_EXAMS, []);
+    saveCache(CACHE_KEY_EXAMS, [createdExam, ...cachedExams.filter(e => e.id !== createdExam.id)]);
+
+    if (Array.isArray(studentIds) && studentIds.length > 0) {
+      await assignStudentsToExam(createdExam.id, studentIds, createdExam.status);
+    }
+
+    return createdExam;
   } catch (err) {
-    console.warn('[ExamService] Supabase createExam insert notice:', err.message);
+    console.error('[ExamService] Failed to create exam:', err);
+    throw apiError || err;
   }
-
-  if (!createdExam) {
-    createdExam = newExamRecord;
-  }
-
-  // Update cache
-  const cachedExams = loadCache(CACHE_KEY_EXAMS, []);
-  saveCache(CACHE_KEY_EXAMS, [createdExam, ...cachedExams.filter(e => e.id !== createdExam.id)]);
-
-  // 2. Assign students
-  if (Array.isArray(studentIds) && studentIds.length > 0) {
-    await assignStudentsToExam(createdExam.id, studentIds, createdExam.status);
-  }
-
-  return createdExam;
 }
 
 /**
- * Updates an existing exam
+ * Updates an existing exam via Express API (with Supabase fallback)
  */
 export async function updateExam(id, examData, studentIds = null) {
   if (!examData.exam_name?.trim()) {
@@ -378,23 +356,25 @@ export async function updateExam(id, examData, studentIds = null) {
     throw new Error('Exam end time must follow the start time.');
   }
 
-  // Conflict check excluding current exam
-  const existingExams = await getExams();
-  const hasConflict = existingExams.some(e => {
-    if (e.id === id || e.status === 'cancelled') return false;
-    if (e.room !== (examData.room || 'LH-302')) return false;
-    const eStart = new Date(e.start_time).getTime();
-    const eEnd = new Date(e.end_time).getTime();
-    return start < eEnd && end > eStart;
-  });
+  try {
+    const existingExams = await getExams();
+    const hasConflict = existingExams.some(e => {
+      if (e.id === id || e.status === 'cancelled') return false;
+      if (e.room && examData.room && e.room !== examData.room) return false;
+      const eStart = new Date(e.start_time).getTime();
+      const eEnd = new Date(e.end_time).getTime();
+      return start < eEnd && end > eStart;
+    });
 
-  const existingExam = existingExams.find(e => e.id === id);
-  const isCurrentlyCancelled = existingExam?.status === 'cancelled';
+    if (hasConflict) {
+      throw new Error(`Schedule conflict: Exam room (${examData.room || 'LH-302'}) is already scheduled for another active exam during this time slot.`);
+    }
+  } catch (err) {
+    if (err.message.includes('Schedule conflict')) throw err;
+    console.warn('[ExamService] Conflict check notice:', err.message);
+  }
 
-  // If exam is currently cancelled and new status is not explicitly provided, it remains cancelled
-  const nextStatus = isCurrentlyCancelled && examData.status !== 'scheduled'
-    ? 'cancelled'
-    : (examData.status || calculateAuthoritativeStatus(examData));
+  const nextStatus = examData.status || calculateAuthoritativeStatus(examData);
 
   const updatePayload = {
     exam_name: examData.exam_name.trim(),
@@ -402,53 +382,99 @@ export async function updateExam(id, examData, studentIds = null) {
     end_time: examData.end_time,
     room: examData.room || 'LH-302',
     status: nextStatus,
-    updated_at: new Date().toISOString()
   };
 
-  let updated = null;
+  // 1. Try Express API
+  let apiError = null;
   try {
-    const { data, error } = await supabase
+    const res = await apiFetch(`/api/exams/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ exam: updatePayload, student_ids: studentIds })
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.success && body.exam) {
+      const cached = loadCache(CACHE_KEY_EXAMS, []);
+      saveCache(CACHE_KEY_EXAMS, cached.map(e => e.id === id ? { ...e, ...body.exam } : e));
+      return body.exam;
+    }
+    apiError = new Error(body.error || `Server responded with ${res.status}`);
+  } catch (err) {
+    apiError = err;
+    if (err.status === 401 || err.status === 403) throw err;
+  }
+
+  // 2. Direct Supabase update fallback
+  try {
+    let { data, error } = await supabase
       .from('exams')
-      .update(updatePayload)
+      .update({ ...updatePayload, updated_at: new Date().toISOString() })
       .eq('id', id)
       .select()
       .single();
 
-    if (!error && data) updated = data;
+    if (error && (error.code === '42703' || String(error.message).includes('room'))) {
+      const { room: _omittedRoom, ...withoutRoom } = updatePayload;
+      const retry = await supabase
+        .from('exams')
+        .update({ ...withoutRoom, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (retry.error) throw new Error(retry.error.message);
+      data = { ...retry.data, room: updatePayload.room };
+      error = null;
+    }
+
+    if (error) throw new Error(error.message || apiError?.message || 'Failed to update exam.');
+
+    const updated = data || { id, ...updatePayload };
+    const cached = loadCache(CACHE_KEY_EXAMS, []);
+    saveCache(CACHE_KEY_EXAMS, cached.map(e => e.id === id ? { ...e, ...updated } : e));
+
+    if (Array.isArray(studentIds)) {
+      await assignStudentsToExam(id, studentIds, updated.status);
+    }
+
+    return updated;
   } catch (err) {
-    console.warn('[ExamService] Supabase updateExam notice:', err.message);
+    console.error('[ExamService] Failed to update exam:', err);
+    throw apiError || err;
   }
-
-  if (!updated) {
-    updated = { id, ...updatePayload };
-  }
-
-  const cached = loadCache(CACHE_KEY_EXAMS, []);
-  saveCache(CACHE_KEY_EXAMS, cached.map(e => e.id === id ? { ...e, ...updated } : e));
-
-  if (Array.isArray(studentIds)) {
-    await assignStudentsToExam(id, studentIds, updated.status);
-  }
-
-  return updated;
 }
 
 /**
- * Cancels an exam (authoritative: once cancelled, no subsequent automatic activation)
+ * Cancels an exam via Express API (with Supabase fallback)
  */
 export async function cancelExam(id) {
+  let apiError = null;
   try {
-    await supabase
+    const res = await apiFetch(`/api/exams/${id}/cancel`, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.success) {
+      const cached = loadCache(CACHE_KEY_EXAMS, []);
+      saveCache(CACHE_KEY_EXAMS, cached.map(e => e.id === id ? { ...e, status: 'cancelled' } : e));
+      return true;
+    }
+    apiError = new Error(body.error || `Server responded with ${res.status}`);
+  } catch (err) {
+    apiError = err;
+    if (err.status === 401 || err.status === 403) throw err;
+  }
+
+  try {
+    const { error } = await supabase
       .from('exams')
       .update({ status: 'cancelled', updated_at: new Date().toISOString() })
       .eq('id', id);
-  } catch (err) {
-    console.warn('[ExamService] Supabase cancelExam notice:', err.message);
-  }
 
-  const cached = loadCache(CACHE_KEY_EXAMS, []);
-  saveCache(CACHE_KEY_EXAMS, cached.map(e => e.id === id ? { ...e, status: 'cancelled' } : e));
-  return true;
+    if (error) throw new Error(error.message || apiError?.message || 'Failed to cancel exam.');
+    const cached = loadCache(CACHE_KEY_EXAMS, []);
+    saveCache(CACHE_KEY_EXAMS, cached.map(e => e.id === id ? { ...e, status: 'cancelled' } : e));
+    return true;
+  } catch (err) {
+    console.error('[ExamService] Failed to cancel exam:', err);
+    throw apiError || err;
+  }
 }
 
 /**
@@ -460,9 +486,7 @@ export async function assignStudentsToExam(examId, studentIds, examStatus = 'sch
   const currentMap = new Map(currentAssigned.map(s => [s.student_id, s]));
 
   const recordsToInsert = [];
-  const initialVerification = examStatus === 'verification' || examStatus === 'device_detection' || examStatus === 'completed'
-    ? 'unverified'
-    : 'unverified';
+  const initialVerification = 'unverified';
 
   for (const sId of uniqueIds) {
     const existing = currentMap.get(sId);
@@ -510,67 +534,95 @@ export async function assignStudentsToExam(examId, studentIds, examStatus = 'sch
   return getExamStudents(examId);
 }
 
+export function sortStudentsDeterministically(records) {
+  if (!Array.isArray(records)) return [];
+  return [...records].sort((a, b) => {
+    const nameA = String(a.student?.name || a.name || '').toLowerCase();
+    const nameB = String(b.student?.name || b.name || '').toLowerCase();
+    const cmp = nameA.localeCompare(nameB);
+    if (cmp !== 0) return cmp;
+    const idA = String(a.student_id || a.student?.id || a.id || '');
+    const idB = String(b.student_id || b.student?.id || b.id || '');
+    return idA.localeCompare(idB);
+  });
+}
+
 /**
  * Fetches assigned students for an exam, joined with student profile details.
  * Dynamically resolves real candidate verification status from Supabase (both exam_students and students tables).
+ * Guarantees deterministic ordering by student name, then student ID.
  */
 export async function getExamStudents(examId) {
+  let records = null;
+
+  // 1. Try Express backend
   try {
-    const { data, error } = await supabase
-      .from('exam_students')
-      .select('*, student:students(*)')
-      .eq('exam_id', examId);
-
-    if (!error && Array.isArray(data) && data.length > 0) {
-      const normalized = data.map(record => ({
-        ...record,
-        verification_status: getStudentVerificationStatus(record)
-      }));
-
-      // Sync cache
-      const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
-      const otherCached = cached.filter(s => s.exam_id !== examId);
-      saveCache(CACHE_KEY_EXAM_STUDENTS, [...otherCached, ...normalized]);
-      return normalized;
+    const res = await apiFetch(`/api/exams/${examId}/students`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        records = data;
+      }
     }
-  } catch (err) {
-    console.warn('[ExamService] Supabase getExamStudents notice:', err.message);
+  } catch (apiErr) {
+    console.warn('[ExamService] Backend getExamStudents notice:', apiErr.message);
   }
 
-  // Fallback: If exam_students is empty or not yet assigned in Supabase, load real candidates from students table
-  try {
-    const { data: dbStudents } = await supabase
-      .from('students')
-      .select('*')
-      .order('name');
+  // 2. Direct Supabase query if backend did not respond
+  if (records === null) {
+    try {
+      const { data, error } = await supabase
+        .from('exam_students')
+        .select('*, student:students(*)')
+        .eq('exam_id', examId);
 
-    if (Array.isArray(dbStudents) && dbStudents.length > 0) {
-      const candidates = dbStudents.map(st => ({
-        exam_id: examId,
-        student_id: st.id,
-        verification_status: getStudentVerificationStatus(st),
-        verified_at: getStudentVerificationStatus(st) === 'verified' ? (st.timestamp || new Date().toISOString()) : null,
-        student: st
-      }));
-
-      const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
-      const otherCached = cached.filter(s => s.exam_id !== examId);
-      saveCache(CACHE_KEY_EXAM_STUDENTS, [...otherCached, ...candidates]);
-      return candidates;
+      if (!error && Array.isArray(data)) {
+        records = data;
+      }
+    } catch (err) {
+      console.warn('[ExamService] Supabase getExamStudents notice:', err.message);
     }
-  } catch (err) {
-    console.warn('[ExamService] Supabase fallback students fetch notice:', err.message);
   }
 
-  const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
-  return cached.filter(s => s.exam_id === examId).map(record => ({
+  if (records === null) {
+    const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
+    records = cached.filter(s => s.exam_id === examId);
+  }
+
+  const normalized = (records || []).map(record => ({
     ...record,
     verification_status: getStudentVerificationStatus(record)
   }));
+
+  const sorted = sortStudentsDeterministically(normalized);
+
+  // Sync cache with deterministic list
+  const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
+  const otherCached = cached.filter(s => s.exam_id !== examId);
+  saveCache(CACHE_KEY_EXAM_STUDENTS, [...otherCached, ...sorted]);
+
+  return sorted;
+}
+
+/**
+ * Fetches comprehensive exam details with student counts and verification status.
+ */
+export async function getExamDetails(examId) {
+  try {
+    const res = await apiFetch(`/api/exams/${examId}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.id) return data;
+    }
+  } catch (err) {
+    console.warn('[ExamService] Backend getExamDetails notice:', err.message);
+  }
+  return getExamById(examId);
 }
 
 /**
  * Updates a student's verification status for a specific exam and syncs with Supabase students table.
+ * Fully checks and propagates errors so the UI never displays false success.
  */
 export async function updateExamStudentVerification(examId, studentId, verificationStatus) {
   if (!VERIFICATION_STATUSES.includes(verificationStatus)) {
@@ -578,37 +630,61 @@ export async function updateExamStudentVerification(examId, studentId, verificat
   }
 
   const verifiedAt = verificationStatus === 'verified' ? new Date().toISOString() : null;
+  let updateSuccess = false;
+  let lastError = null;
 
+  // 1. Prefer Express backend (authorized via schedulerDb, syncs both exam_students & students)
   try {
-    await supabase
-      .from('exam_students')
-      .upsert({
-        exam_id: examId,
-        student_id: studentId,
-        verification_status: verificationStatus,
-        verified_at: verifiedAt
-      });
-  } catch (err) {
-    console.warn('[ExamService] Supabase upsert exam_students notice:', err.message);
+    const res = await apiFetch(`/api/exams/${examId}/students/${studentId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ verification_status: verificationStatus })
+    });
+    if (res.ok) {
+      updateSuccess = true;
+    } else {
+      const body = await res.json().catch(() => ({}));
+      lastError = new Error(body.error || `Server responded with ${res.status}`);
+    }
+  } catch (apiErr) {
+    lastError = apiErr;
+    console.warn('[ExamService] Backend update verification notice, trying Supabase fallback:', apiErr.message);
   }
 
-  // Also sync students table in Supabase so status updates reflect across all views
-  try {
-    const isVerified = verificationStatus === 'verified';
-    await supabase
-      .from('students')
-      .update({
-        status: isVerified ? 'Verified' : 'Pending',
-        entryDecision: isVerified ? 'Allowed' : verificationStatus === 'failed' ? 'Denied' : 'Pending',
-        verificationCompleted: isVerified,
-        entryAllowed: isVerified
-      })
-      .eq('id', studentId);
-  } catch (err) {
-    console.warn('[ExamService] Supabase sync students table notice:', err.message);
+  // 2. Direct Supabase fallback if backend call failed
+  if (!updateSuccess) {
+    try {
+      const { error: examStudentErr } = await supabase
+        .from('exam_students')
+        .upsert({
+          exam_id: examId,
+          student_id: studentId,
+          verification_status: verificationStatus,
+          verified_at: verifiedAt
+        });
+
+      if (examStudentErr) {
+        throw new Error(examStudentErr.message);
+      }
+      updateSuccess = true;
+
+      // Best-effort sync to students table
+      const isVerified = verificationStatus === 'verified';
+      await supabase
+        .from('students')
+        .update({
+          status: isVerified ? 'Verified' : 'Pending',
+          entryDecision: isVerified ? 'Allowed' : verificationStatus === 'failed' ? 'Denied' : 'Pending',
+          verificationCompleted: isVerified,
+          entryAllowed: isVerified
+        })
+        .eq('id', studentId);
+    } catch (err) {
+      console.error('[ExamService] Failed to update verification status:', err);
+      throw lastError || err;
+    }
   }
 
-  // Update cache
+  // Update local cache
   const cached = loadCache(CACHE_KEY_EXAM_STUDENTS, []);
   saveCache(
     CACHE_KEY_EXAM_STUDENTS,
@@ -622,7 +698,8 @@ export async function updateExamStudentVerification(examId, studentId, verificat
             ...s.student,
             status: verificationStatus === 'verified' ? 'Verified' : 'Pending',
             entryDecision: verificationStatus === 'verified' ? 'Allowed' : verificationStatus === 'failed' ? 'Denied' : 'Pending',
-            verificationCompleted: verificationStatus === 'verified'
+            verificationCompleted: verificationStatus === 'verified',
+            entryAllowed: verificationStatus === 'verified'
           } : undefined
         };
       }
@@ -633,10 +710,37 @@ export async function updateExamStudentVerification(examId, studentId, verificat
   return true;
 }
 
+// Canonical alias per spec
+export const verifyStudent = updateExamStudentVerification;
+
+// Explicit device control helpers
+export async function toggleFaceVerification(exam, enabled) {
+  return sendModelControl(exam, 'face_verification', enabled ? 'start' : 'stop');
+}
+
+export async function pauseDeviceDetection(exam) {
+  return sendModelControl(exam, 'device_detection', 'pause');
+}
+
+export async function resumeDeviceDetection(exam) {
+  return sendModelControl(exam, 'device_detection', 'resume');
+}
+
 /**
  * Fetches device incidents for an exam
  */
 export async function getExamIncidents(examId) {
+  try {
+    const res = await apiFetch(`/api/exams/${examId}/incidents`);
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch (apiErr) {
+    if (apiErr.status === 401 || apiErr.status === 403) throw apiErr;
+    console.warn('[ExamService] Backend getExamIncidents notice:', apiErr.message);
+  }
+
   try {
     const { data, error } = await supabase
       .from('device_incidents')
@@ -644,70 +748,118 @@ export async function getExamIncidents(examId) {
       .eq('exam_id', examId)
       .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      return data;
-    }
+    if (error) throw error;
+    return data || [];
   } catch (err) {
-    console.warn('[ExamService] Supabase getExamIncidents notice:', err.message);
+    console.error('[ExamService] Failed to load exam incidents:', err);
+    throw err;
   }
-
-  const cached = loadCache(CACHE_KEY_INCIDENTS, []);
-  return cached.filter(i => i.exam_id === examId);
 }
 
 /**
  * Fetches all device incidents across all exams
  */
 export async function getAllIncidents() {
+  let backendError = null;
+  try {
+    const res = await apiFetch('/api/incidents');
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        saveCache(CACHE_KEY_INCIDENTS, data);
+        return data;
+      }
+    } else {
+      const body = await res.json().catch(() => ({}));
+      backendError = new Error(body.error || `Server responded with ${res.status}`);
+    }
+  } catch (apiErr) {
+    backendError = apiErr;
+    if (apiErr.status === 401 || apiErr.status === 403) throw apiErr;
+  }
+
   try {
     const { data, error } = await supabase
       .from('device_incidents')
       .select('*, exam:exams(*), student:students(*)')
       .order('created_at', { ascending: false });
 
-    if (!error && data) {
+    if (!error && Array.isArray(data)) {
       saveCache(CACHE_KEY_INCIDENTS, data);
       return data;
     }
+    if (error) throw new Error(error.message || backendError?.message || 'Failed to load incidents.');
   } catch (err) {
-    console.warn('[ExamService] Supabase getAllIncidents notice:', err.message);
+    console.error('[ExamService] Failed to load all incidents:', err);
+    throw backendError || err;
   }
 
-  return loadCache(CACHE_KEY_INCIDENTS, []);
+  return [];
 }
 
 /**
- * Updates an incident review decision (Confirm, Dismiss, or Pending)
+ * Updates an incident review decision (Confirm, Dismiss, or Pending; supports approved/rejected aliases)
  */
 export async function updateIncidentReview(incidentId, { review_status, student_id, reviewed_by }) {
-  if (!REVIEW_STATUSES.includes(review_status)) {
-    throw new Error(`Invalid review status: ${review_status}`);
+  const normalized = normalizeReviewStatus(review_status);
+  if (!['pending', 'confirmed', 'dismissed'].includes(normalized)) {
+    throw new Error(`Invalid review status: ${review_status}. Expected confirmed, dismissed, or pending.`);
   }
 
   const payload = {
-    review_status,
+    review_status: normalized,
     student_id: student_id !== undefined ? student_id : null,
     reviewed_by: reviewed_by || 'Admin Officer',
     reviewed_at: new Date().toISOString()
   };
 
+  let apiError = null;
+  // 1. Try Express backend
   try {
-    await supabase
-      .from('device_incidents')
-      .update(payload)
-      .eq('id', incidentId);
+    const res = await apiFetch(`/api/incidents/${incidentId}/review`, {
+      method: 'PUT',
+      body: JSON.stringify(payload)
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok && body.success) {
+      const updatedIncident = body.incident || body.data;
+      const cached = loadCache(CACHE_KEY_INCIDENTS, []);
+      saveCache(
+        CACHE_KEY_INCIDENTS,
+        cached.map(i => i.id === incidentId ? { ...i, ...payload } : i)
+      );
+      return updatedIncident || true;
+    }
+    apiError = new Error(body.error || `Server responded with ${res.status}`);
   } catch (err) {
-    console.warn('[ExamService] Supabase updateIncidentReview notice:', err.message);
+    apiError = err;
+    if (err.status === 401 || err.status === 403) throw err;
   }
 
-  // Update cache
-  const cached = loadCache(CACHE_KEY_INCIDENTS, []);
-  saveCache(
-    CACHE_KEY_INCIDENTS,
-    cached.map(i => i.id === incidentId ? { ...i, ...payload } : i)
-  );
+  // 2. Direct Supabase update fallback
+  try {
+    const { data, error } = await supabase
+      .from('device_incidents')
+      .update(payload)
+      .eq('id', incidentId)
+      .select('*, exam:exams(*), student:students(*)');
 
-  return true;
+    if (error) throw new Error(error.message || apiError?.message || 'Failed to update incident in database.');
+    if (!data || data.length === 0) {
+      throw new Error(`Incident with ID ${incidentId} not found in database.`);
+    }
+
+    const cached = loadCache(CACHE_KEY_INCIDENTS, []);
+    saveCache(
+      CACHE_KEY_INCIDENTS,
+      cached.map(i => i.id === incidentId ? { ...i, ...payload } : i)
+    );
+
+    return data[0] || true;
+  } catch (err) {
+    console.error('[ExamService] Failed to update incident review:', err);
+    throw apiError || err;
+  }
 }
 
 /**

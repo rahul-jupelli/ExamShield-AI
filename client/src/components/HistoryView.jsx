@@ -10,6 +10,20 @@ import {
 } from 'lucide-react';
 import GlassCard from './GlassCard';
 
+function getDetectedObjects(log) {
+  if (!log || !log.detectedObjects) return [];
+  if (Array.isArray(log.detectedObjects)) return log.detectedObjects;
+  if (typeof log.detectedObjects === 'string') {
+    try {
+      const parsed = JSON.parse(log.detectedObjects);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      return log.detectedObjects.split(',').map(s => s.trim()).filter(Boolean);
+    }
+  }
+  return [];
+}
+
 export default function HistoryView({ logs = [], theme = 'dark' }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [deviceFilter, setDeviceFilter] = useState('ALL');
@@ -20,7 +34,7 @@ export default function HistoryView({ logs = [], theme = 'dark' }) {
   const uniqueDevices = useMemo(() => {
     const devices = new Set();
     logs.forEach(log => {
-      log.detectedObjects.forEach(obj => devices.add(obj));
+      getDetectedObjects(log).forEach(obj => devices.add(obj));
     });
     return Array.from(devices);
   }, [logs]);
@@ -34,14 +48,16 @@ export default function HistoryView({ logs = [], theme = 'dark' }) {
   }, [logs]);
 
   const filteredLogs = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
     return logs.filter(log => {
-      const matchSearch = searchQuery ? (
-        log.decision.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.operator.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        log.detectedObjects.some(obj => obj.toLowerCase().includes(searchQuery.toLowerCase()))
+      const objects = getDetectedObjects(log);
+      const matchSearch = q ? (
+        (log.decision || '').toLowerCase().includes(q) ||
+        (log.operator || '').toLowerCase().includes(q) ||
+        objects.some(obj => String(obj).toLowerCase().includes(q))
       ) : true;
 
-      const matchDevice = deviceFilter === 'ALL' ? true : log.detectedObjects.includes(deviceFilter);
+      const matchDevice = deviceFilter === 'ALL' ? true : objects.includes(deviceFilter);
       const matchHall = hallFilter === 'ALL' ? true : log.hall === hallFilter;
 
       return matchSearch && matchDevice && matchHall;
@@ -134,7 +150,7 @@ export default function HistoryView({ logs = [], theme = 'dark' }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                  {log.detectedObjects.map((obj, i) => (
+                  {getDetectedObjects(log).map((obj, i) => (
                     <span key={i} className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
                       isLight ? 'bg-rose-50 border-rose-200 text-rose-700 font-semibold' : 'bg-rose-950/40 border-rose-800/30 text-rose-300'
                     }`}>

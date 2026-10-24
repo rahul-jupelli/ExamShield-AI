@@ -16,9 +16,9 @@ export default defineConfig(() => {
         port: 24679,
       },
       proxy: {
-        '/api': 'http://localhost:5000',
+        '/api': 'http://localhost:3000',
         '/ws': {
-          target: 'ws://localhost:5000',
+          target: 'ws://localhost:3000',
           ws: true,
         },
       },

@@ -153,3 +153,43 @@ SUPABASE_SERVICE_ROLE_KEY=<optional, see above>
 | `MODEL_COMMAND { requestId, model, action, examId }` | server → Pi | Start / stop a model |
 | `MODEL_ACK { requestId, ok, error }` | Pi → server | Result of the command (stop is only acked after the process exited and the camera is released) |
 | `MODEL_STATUS { activeModel, examId, status, error }` | Pi → server | Real model state, reported every ~3 s (detects crashes) |
+
+---
+
+## Standalone laptop-as-Raspberry-Pi runtime (real camera inference)
+
+The development protocol simulator (`dev_pi_simulator.py`) does **not** run AI models and must not be used to claim inference is working. To run real inference on the laptop webcam, use the standalone Python runtime below. It opens its own OpenCV preview window and does not require the Admin Exams page to start the camera.
+
+Run commands from the project root (`ExamShield-AI`). Install the project's Python dependencies first, including `ultralytics` and `opencv-python`.
+
+```powershell
+# Run the real device detector on the laptop webcam
+python hardware/laptop_pi_runtime.py --mode device_detection
+
+# Run the existing YOLO face detector on the laptop webcam
+python hardware/laptop_pi_runtime.py --mode face_verification
+```
+
+The default camera index is `0`. If that is not your webcam, try `--camera 1`. You can override weights using `--weights "C:\path\to\model.pt"`.
+
+Existing model paths used by default:
+
+- Device detector: `models/new_device_latest.pt`
+- Face detector: `models/ExamShield_face_detector_best.pt`
+
+**Important face-verification limitation:** `ExamShield_face_detector_best.pt` detects face locations; it does not identify a student. Identity verification requires a separate FaceNet/MTCNN embedding and comparison against the enrolled student's stored embedding. The standalone runtime labels this mode as face detection only and does not claim that a person has been verified.
+
+Press **Q** or **Esc** in the preview window to stop and release the camera. Only one application/process should use the webcam at a time. Do not start the standalone runtime and the bridge-managed model worker against the same camera simultaneously.
+
+### Connecting the physical bridge to the backend
+
+Set these environment variables before running `raspberry_pi_bridge.py`:
+
+- `PI_BRIDGE_KEY`: same strong shared secret as configured for the backend; there is no default key.
+- `EXAMSHIELD_SERVER_HOST`: backend host (defaults to `127.0.0.1` for same-machine development).
+- `EXAMSHIELD_SERVER_PORT`: backend port (defaults to `3000`).
+- `EXAMSHIELD_MODEL_DIR`: optional model directory (defaults to the project's root `models` directory).
+- `EXAMSHIELD_CAMERA_INDEX`: OpenCV camera index (defaults to `0`).
+- `EXAMSHIELD_HEADLESS_WORKER`: `1` by default for bridge-managed workers; set to `0` only when a preview window is wanted on a desktop.
+
+The standalone runtime is currently a local camera/inference process; it does not itself write exam attendance or incident records to Supabase. That backend integration must be implemented and tested separately before treating the laptop runtime as a complete end-to-end ExamShield session.

@@ -40,9 +40,11 @@ export default function IncidentReviewView({
   // Selected incident for modal
   const [selectedIncident, setSelectedIncident] = useState(null);
   const [modalAssignedStudents, setModalAssignedStudents] = useState([]);
+  const [loadError, setLoadError] = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [incs, examList] = await Promise.all([
         getAllIncidents(),
@@ -51,7 +53,8 @@ export default function IncidentReviewView({
       setIncidents(incs || []);
       setExams(examList || []);
     } catch (err) {
-      console.warn('Error loading incidents:', err);
+      console.error('Error loading incidents:', err);
+      setLoadError(err.message || 'Failed to load device incidents from database.');
     } finally {
       setLoading(false);
     }
@@ -151,6 +154,22 @@ export default function IncidentReviewView({
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {/* Error Alert */}
+      {loadError && (
+        <div className="p-4 rounded-3xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+            <span>{loadError}</span>
+          </div>
+          <button
+            onClick={loadData}
+            className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold cursor-pointer transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Metrics Banner */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">

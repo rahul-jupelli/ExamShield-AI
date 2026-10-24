@@ -97,6 +97,23 @@ except ImportError as e:
     log.critical("Error: %s", e)
     sys.exit(1)
 
+# ── Device Detection Model (Ultralytics YOLO) ───────────────────────────────────
+device_model = None
+device_model_path = os.environ.get(
+    "DEVICE_MODEL_PATH",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", "new_device_latest.pt")
+)
+try:
+    from ultralytics import YOLO
+    if os.path.isfile(device_model_path):
+        device_model = YOLO(device_model_path)
+        log.info("YOLO device detector loaded from %s (classes: %s)", device_model_path, device_model.names)
+    else:
+        log.warning("Device model weight file not found at %s", device_model_path)
+except Exception as e:
+    log.warning("Could not load YOLO device detector: %s", e)
+
+
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -197,7 +214,78 @@ def get_embedding(img: Image.Image):
 
 @app.get("/health")
 def health():
-    return jsonify({"status": "ok", "device": str(device), "port": PORT})
+    return jsonify({
+        "status": "ok",
+        "device": str(device),
+        "port": PORT,
+        "models": {
+            "facenet": True,
+            "device_detector": device_model is not None,
+            "device_model_path": device_model_path if device_model else None,
+            "device_classes": device_model.names if device_model else None
+        }
+    })
+
+
+@app.post("/detect-devices")
+def detect_devices():
+    """
+    Accepts image via file upload or JSON base64 / URL.
+    Runs real inference with models/new_device_latest.pt (Ultralytics YOLOv8).
+    Returns real bounding boxes, classes, and confidence scores.
+    """
+    if device_model is None:
+        return jsonify({
+            "error": "Device detection model (new_device_latest.pt) is not loaded.",
+            "success": False
+        }), 503
+
+    try:
+        import time
+        img: Image.Image | None = None
+
+        if "file" in request.files:
+            file = request.files["file"]
+            img = load_image_from_bytes(file.read())
+        elif request.is_json:
+            body = request.get_json(force=True, silent=True) or {}
+            if "image_b64" in body:
+                img = load_image_from_b64(body["image_b64"])
+            elif "image_url" in body:
+                img = load_image_from_url(body["image_url"])
+
+        if img is None:
+            return jsonify({"error": "No image provided. Send 'file' (multipart) or 'image_b64'/'image_url' (JSON)."}), 400
+
+        t0 = time.time()
+        results = device_model(img, conf=0.30, verbose=False)
+        inference_time_ms = round((time.time() - t0) * 1000.0, 2)
+
+        detections = []
+        for r in results:
+            for box in r.boxes:
+                cls_id = int(box.cls[0].item())
+                cls_name = r.names.get(cls_id, str(cls_id))
+                conf = round(float(box.conf[0].item()), 4)
+                xyxy = [round(float(v), 2) for v in box.xyxy[0].tolist()]
+                detections.append({
+                    "class": cls_name,
+                    "class_id": cls_id,
+                    "confidence": conf,
+                    "box": xyxy
+                })
+
+        return jsonify({
+            "success": True,
+            "detections": detections,
+            "count": len(detections),
+            "inference_time_ms": inference_time_ms,
+            "model": "new_device_latest.pt",
+            "image_size": [img.width, img.height]
+        })
+    except Exception as exc:
+        log.error("Device detection error: %s\n%s", exc, traceback.format_exc())
+        return jsonify({"error": str(exc), "success": False}), 500
 
 
 @app.post("/embed")

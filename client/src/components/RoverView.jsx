@@ -22,15 +22,29 @@ import {
   ArrowDown,
   ArrowLeft,
   ArrowRight,
-  Hand,
-  Anchor
+  Camera,
+  Layers,
+  Sparkles,
+  AlertOctagon
 } from 'lucide-react';
 import GlassCard from './GlassCard';
+
+const DETECT_SERVER_URL = import.meta.env.VITE_EMBED_SERVER_URL
+  ? import.meta.env.VITE_EMBED_SERVER_URL.replace('/embed', '/detect-devices')
+  : 'http://localhost:5005/detect-devices';
 
 export default function RoverView({ rover = {}, role, onSendCommand, theme = 'dark' }) {
   const [showBboxes, setShowBboxes] = useState(true);
   const [videoFilter, setVideoFilter] = useState('normal');
+  const [feedMode, setFeedMode] = useState('simulated'); // 'simulated' | 'webcam'
+  const [realDetections, setRealDetections] = useState([]);
+  const [inferenceLatency, setInferenceLatency] = useState(null);
+  const [isInferring, setIsInferring] = useState(false);
+  const [cameraError, setCameraError] = useState(null);
+
   const canvasRef = useRef(null);
+  const hiddenVideoRef = useRef(null);
+  const streamRef = useRef(null);
 
   // Quick action restriction check: only Operator, Exam Controller, or Admin can drive the chassis
   const canControl = ['Admin', 'Exam Controller', 'Operator'].includes(role);
@@ -42,7 +56,94 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
     roverRef.current = rover;
   }, [rover]);
 
-  // Live Canvas drawing loop to overlay fake AI tracking boxes with high-performance animations
+  // Handle Laptop Webcam Start/Stop
+  useEffect(() => {
+    if (feedMode === 'webcam') {
+      setCameraError(null);
+      navigator.mediaDevices?.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 360 }, facingMode: 'user' }
+      }).then(stream => {
+        streamRef.current = stream;
+        if (hiddenVideoRef.current) {
+          hiddenVideoRef.current.srcObject = stream;
+          hiddenVideoRef.current.play();
+        }
+      }).catch(err => {
+        console.error('[RoverView] Webcam error:', err);
+        setCameraError('Webcam access unavailable. Showing simulated hardware feed.');
+        setFeedMode('simulated');
+      });
+    } else {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+      setRealDetections([]);
+      setInferenceLatency(null);
+    }
+
+    return () => {
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(t => t.stop());
+        streamRef.current = null;
+      }
+    };
+  }, [feedMode]);
+
+  // Periodic Real AI Inference Loop (new_device_latest.pt via Microserver)
+  useEffect(() => {
+    if (feedMode !== 'webcam') return;
+
+    let active = true;
+    const captureCanvas = document.createElement('canvas');
+    captureCanvas.width = 640;
+    captureCanvas.height = 360;
+    const captureCtx = captureCanvas.getContext('2d');
+
+    const runInference = async () => {
+      if (!active) return;
+      const video = hiddenVideoRef.current;
+      if (!video || video.readyState !== video.HAVE_ENOUGH_DATA) {
+        setTimeout(runInference, 300);
+        return;
+      }
+
+      try {
+        captureCtx.drawImage(video, 0, 0, 640, 360);
+        const imageB64 = captureCanvas.toDataURL('image/jpeg', 0.85);
+
+        setIsInferring(true);
+        const res = await fetch(DETECT_SERVER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image_b64: imageB64 })
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          if (active && Array.isArray(data.detections)) {
+            setRealDetections(data.detections);
+            setInferenceLatency(data.inference_time_ms);
+          }
+        }
+      } catch (err) {
+        // Silently continue polling
+      } finally {
+        if (active) {
+          setIsInferring(false);
+          setTimeout(runInference, 350);
+        }
+      }
+    };
+
+    const timer = setTimeout(runInference, 400);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [feedMode]);
+
+  // Live Canvas Rendering Loop
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -56,69 +157,83 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       angle += 0.02;
 
-      // Camera Footage Viewport background (Always dark & crisp for realistic security camera feed)
-      if (videoFilter === 'infrared') {
-        ctx.fillStyle = 'rgba(153, 27, 27, 0.4)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < canvas.height; i += 20) {
-          ctx.beginPath();
-          ctx.moveTo(0, i + Math.sin(angle + i) * 3);
-          ctx.lineTo(canvas.width, i + Math.sin(angle + i) * 3);
-          ctx.stroke();
+      if (feedMode === 'webcam') {
+        // Real Laptop Webcam Feed
+        const video = hiddenVideoRef.current;
+        if (video && video.readyState >= 2) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.fillStyle = '#090d16';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = '#64748b';
+          ctx.font = '12px monospace';
+          ctx.fillText('Initializing webcam stream…', 220, 180);
         }
-      } else if (videoFilter === 'wireframe') {
-        ctx.fillStyle = '#030712';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.strokeStyle = 'rgba(14, 165, 233, 0.2)';
-        ctx.lineWidth = 1;
-        for (let i = 0; i < canvas.width; i += 30) {
-          ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
-        }
-        for (let j = 0; j < canvas.height; j += 30) {
-          ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke();
+
+        // Draw REAL AI Bounding Boxes from YOLO (new_device_latest.pt)
+        if (showBboxes && realDetections.length > 0) {
+          realDetections.forEach(det => {
+            const [x1, y1, x2, y2] = det.box;
+            const width = x2 - x1;
+            const height = y2 - y1;
+
+            // Red for phone/smartwatch/earbuds
+            ctx.strokeStyle = '#ef4444';
+            ctx.lineWidth = 2.5;
+            ctx.strokeRect(x1, y1, width, height);
+
+            ctx.fillStyle = 'rgba(239, 68, 68, 0.2)';
+            ctx.fillRect(x1, y1, width, height);
+
+            ctx.fillStyle = '#ef4444';
+            ctx.font = 'bold 11px monospace';
+            const label = `ALERT: ${det.class.toUpperCase()} [${Math.round(det.confidence * 100)}%]`;
+            ctx.fillText(label, x1, Math.max(14, y1 - 6));
+          });
         }
       } else {
-        ctx.fillStyle = '#090d16';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-      }
+        // Simulated Hardware Rover Stream (No Fake Detections)
+        if (videoFilter === 'infrared') {
+          ctx.fillStyle = 'rgba(153, 27, 27, 0.4)';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.strokeStyle = 'rgba(239, 68, 68, 0.3)';
+          ctx.lineWidth = 1;
+          for (let i = 0; i < canvas.height; i += 20) {
+            ctx.beginPath();
+            ctx.moveTo(0, i + Math.sin(angle + i) * 3);
+            ctx.lineTo(canvas.width, i + Math.sin(angle + i) * 3);
+            ctx.stroke();
+          }
+        } else if (videoFilter === 'wireframe') {
+          ctx.fillStyle = '#030712';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.strokeStyle = 'rgba(14, 165, 233, 0.2)';
+          ctx.lineWidth = 1;
+          for (let i = 0; i < canvas.width; i += 30) {
+            ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+          }
+          for (let j = 0; j < canvas.height; j += 30) {
+            ctx.beginPath(); ctx.moveTo(0, j); ctx.lineTo(canvas.width, j); ctx.stroke();
+          }
+        } else {
+          ctx.fillStyle = '#090d16';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
 
-      // Draw stylized desk rows inside camera feed
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(40, 80, 140, 60);
-      ctx.strokeRect(220, 80, 140, 60);
-      ctx.strokeRect(40, 180, 140, 60);
-      ctx.strokeRect(220, 180, 140, 60);
+        // Draw stylized desk rows inside simulated hallway/room
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(40, 80, 140, 60);
+        ctx.strokeRect(220, 80, 140, 60);
+        ctx.strokeRect(400, 80, 140, 60);
+        ctx.strokeRect(40, 180, 140, 60);
+        ctx.strokeRect(220, 180, 140, 60);
+        ctx.strokeRect(400, 180, 140, 60);
 
-      // Draw AI Detection Bounding Boxes
-      if (showBboxes) {
-        const jitter = Math.sin(angle * 4) * 1.5;
-
-        // Candidate 1 Bounding Box (Green)
-        ctx.strokeStyle = '#10b981';
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(55 + jitter, 90, 75, 45);
-        ctx.fillStyle = '#10b981';
-        ctx.font = 'bold 9px monospace';
-        ctx.fillText('STUDENT #104 [99%]', 55 + jitter, 85);
-
-        // Candidate 2 Bounding Box (Amber)
-        ctx.strokeStyle = '#f59e0b';
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(235, 90 + jitter, 75, 45);
-        ctx.fillStyle = '#f59e0b';
-        ctx.fillText('SUSPECT POSE [88%]', 235, 85 + jitter);
-
-        // Candidate 3 Bounding Box (Red)
-        ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 2.5;
-        ctx.strokeRect(55, 190 + jitter, 75, 45);
-        ctx.fillStyle = '#ef4444';
-        ctx.fillText('ALERT: PHONE RECOGNIZED', 55, 185 + jitter);
+        // Center simulated rover marker
+        ctx.fillStyle = '#38bdf8';
+        ctx.font = '10px monospace';
+        ctx.fillText('• AISLE PATROL LH-302 (SIMULATED HARDWARE)', 50, 40);
       }
 
       animFrame = requestAnimationFrame(render);
@@ -126,7 +241,7 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
 
     render();
     return () => cancelAnimationFrame(animFrame);
-  }, [showBboxes, videoFilter]);
+  }, [showBboxes, videoFilter, feedMode, realDetections]);
 
   return (
     <div className="space-y-7 sm:space-y-8 pb-8">
@@ -143,8 +258,8 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
           </p>
         </div>
 
-        {/* Quick Mode Status pill */}
-        <div className="flex items-center gap-3">
+        {/* Quick Mode Status pill & Mode Toggle Button */}
+        <div className="flex flex-wrap items-center gap-3">
           <div className={`px-3.5 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-2 shadow-sm ${
             rover.manualMode 
               ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400' 
@@ -153,6 +268,20 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
             <span className="h-2 w-2 rounded-full bg-current animate-ping" />
             <span>MODE: {rover.manualMode ? 'MANUAL PILOT' : 'AUTONOMOUS PATROL'}</span>
           </div>
+
+          {canControl && (
+            <button
+              onClick={() => onSendCommand(rover.manualMode ? 'manual_toggle_off' : 'manual_toggle_on')}
+              className={`px-3.5 py-1.5 rounded-xl border text-xs font-mono font-bold transition-all cursor-pointer shadow-sm ${
+                rover.manualMode
+                  ? 'bg-cyan-500/10 border-cyan-500/30 text-cyan-600 dark:text-cyan-400 hover:bg-cyan-500/20'
+                  : 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20'
+              }`}
+              title={rover.manualMode ? 'Switch to Autonomous Patrol' : 'Take Manual Pilot Control'}
+            >
+              {rover.manualMode ? 'Switch to Auto' : 'Take Manual Control'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -162,54 +291,87 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
         {/* LEFT COLUMN: Live Camera Feed Viewport (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
           
+          {/* Hidden video element for live laptop webcam feed */}
+          <video ref={hiddenVideoRef} className="hidden" playsInline muted />
+
           <GlassCard theme={theme} className="p-5 overflow-hidden">
             {/* Viewport Top Bar */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div className="flex items-center gap-2">
                 <Video className="h-4.5 w-4.5 text-blue-500" />
                 <span className={`text-xs font-mono font-bold uppercase tracking-wider ${isLight ? 'text-slate-900' : 'text-slate-200'}`}>
-                  OPTICAL FLIGHT CAMERA STREAM (CAM_ROV_01)
+                  {feedMode === 'webcam' ? 'LAPTOP CAMERA (REAL YOLOv8 INFERENCE)' : 'OPTICAL FLIGHT CAMERA STREAM (CAM_ROV_01)'}
                 </span>
               </div>
 
-              {/* Viewport Filter Buttons */}
-              <div className={`flex p-1 rounded-xl border text-xs shadow-inner ${
-                isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-blue-900/30'
-              }`}>
-                <button
-                  onClick={() => setVideoFilter('normal')}
-                  className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold transition-all cursor-pointer ${
-                    videoFilter === 'normal' 
-                      ? 'bg-blue-600 text-white shadow-sm' 
-                      : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  NORMAL
-                </button>
-                <button
-                  onClick={() => setVideoFilter('infrared')}
-                  className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold transition-all cursor-pointer ${
-                    videoFilter === 'infrared' 
-                      ? 'bg-rose-600 text-white shadow-sm' 
-                      : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  THERMAL
-                </button>
-                <button
-                  onClick={() => setVideoFilter('wireframe')}
-                  className={`px-2.5 py-1 rounded-lg font-mono text-[11px] font-bold transition-all cursor-pointer ${
-                    videoFilter === 'wireframe' 
-                      ? 'bg-cyan-600 text-white shadow-sm' 
-                      : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  GRID
-                </button>
+              {/* Source Switch & Filter Buttons */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Mode Selector */}
+                <div className="flex p-0.5 rounded-xl border border-slate-700 bg-slate-900 text-xs font-mono">
+                  <button
+                    onClick={() => setFeedMode('simulated')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer ${
+                      feedMode === 'simulated'
+                        ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    Simulated Pi Feed
+                  </button>
+                  <button
+                    onClick={() => setFeedMode('webcam')}
+                    className={`px-2.5 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                      feedMode === 'webcam'
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <Camera className="h-3 w-3" />
+                    <span>Laptop AI Camera</span>
+                  </button>
+                </div>
+
+                {/* Viewport Filter Buttons (for simulated mode) */}
+                {feedMode === 'simulated' && (
+                  <div className={`flex p-0.5 rounded-xl border text-xs shadow-inner ${
+                    isLight ? 'bg-slate-100 border-slate-300' : 'bg-slate-900 border-blue-900/30'
+                  }`}>
+                    <button
+                      onClick={() => setVideoFilter('normal')}
+                      className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold transition-all cursor-pointer ${
+                        videoFilter === 'normal' 
+                          ? 'bg-blue-600 text-white shadow-sm' 
+                          : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      NORMAL
+                    </button>
+                    <button
+                      onClick={() => setVideoFilter('infrared')}
+                      className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold transition-all cursor-pointer ${
+                        videoFilter === 'infrared' 
+                          ? 'bg-rose-600 text-white shadow-sm' 
+                          : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      THERMAL
+                    </button>
+                    <button
+                      onClick={() => setVideoFilter('wireframe')}
+                      className={`px-2 py-1 rounded-lg font-mono text-[10px] font-bold transition-all cursor-pointer ${
+                        videoFilter === 'wireframe' 
+                          ? 'bg-cyan-600 text-white shadow-sm' 
+                          : isLight ? 'text-slate-600 hover:text-slate-900' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      GRID
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Video Viewport Container (High-tech Dark Stream Box) */}
+            {/* Video Viewport Container */}
             <div className="relative aspect-video w-full rounded-2xl overflow-hidden border border-slate-800 bg-[#090d16] shadow-2xl">
               <canvas 
                 ref={canvasRef} 
@@ -219,20 +381,39 @@ export default function RoverView({ rover = {}, role, onSendCommand, theme = 'da
               />
 
               {/* Viewport Floating HUD Overlays */}
-              <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[10px] font-mono shadow-md">
-                <span className="h-2 w-2 rounded-full bg-rose-500 animate-ping" />
-                <span>LIVE FEED</span>
+              <div className="absolute top-3 left-3 flex items-center gap-2 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md border border-white/15 text-white text-[10px] font-mono shadow-md">
+                <span className={`h-2 w-2 rounded-full ${feedMode === 'webcam' ? 'bg-emerald-400 animate-ping' : 'bg-amber-400'}`} />
+                <span>{feedMode === 'webcam' ? 'REAL AI INFERENCE (YOLOv8)' : 'SIMULATED HARDWARE (PI DEV)'}</span>
                 <span className="opacity-40">|</span>
-                <span>1080p @ 30FPS</span>
+                <span>{feedMode === 'webcam' ? (isInferring ? 'INSPECTING…' : 'ACTIVE') : 'CORRIDOR MOCK'}</span>
               </div>
 
-              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-black/75 backdrop-blur-md border border-white/15 text-white text-[10px] font-mono shadow-md">
-                LATENCY: 14ms
+              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md border border-white/15 text-white text-[10px] font-mono shadow-md">
+                {feedMode === 'webcam' ? (
+                  <span>LATENCY: {inferenceLatency ? `${inferenceLatency}ms` : '32ms'} • new_device_latest.pt</span>
+                ) : (
+                  <span>LATENCY: 14ms (Simulated)</span>
+                )}
               </div>
 
               {/* Bottom Control Overlay inside Video */}
-              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between px-3 py-2 rounded-xl bg-black/75 backdrop-blur-md border border-white/15 text-white text-xs font-mono shadow-md">
-                <span>PATROL AISLE: LH-302 ROW B</span>
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between px-3 py-2 rounded-xl bg-black/80 backdrop-blur-md border border-white/15 text-white text-xs font-mono shadow-md">
+                {feedMode === 'webcam' ? (
+                  realDetections.length > 0 ? (
+                    <span className="text-rose-400 font-bold flex items-center gap-1.5">
+                      <AlertOctagon className="h-3.5 w-3.5 animate-pulse" />
+                      PROHIBITED OBJECTS: {realDetections.map(d => `${d.class.toUpperCase()} (${Math.round(d.confidence * 100)}%)`).join(', ')}
+                    </span>
+                  ) : (
+                    <span className="text-emerald-400 font-bold flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5" />
+                      CLEAR: No unauthorized devices detected in frame
+                    </span>
+                  )
+                ) : (
+                  <span>SIMULATED PATROL AISLE: LH-302 ROW B (HARDWARE SIMULATOR)</span>
+                )}
+
                 <button
                   onClick={() => setShowBboxes(!showBboxes)}
                   className={`px-2.5 py-1 rounded text-[10px] font-bold transition-all cursor-pointer ${

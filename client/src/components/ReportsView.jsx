@@ -10,16 +10,26 @@ import GlassCard from './GlassCard';
 
 export default function ReportsView({ students = [], role, operatorName, theme = 'dark' }) {
   const flaggedStudents = useMemo(() => {
-    return students.filter(s => s.status !== 'Verified');
+    return students.filter(s => {
+      const st = String(s.status || '').toLowerCase().trim();
+      return st === 'flagged' || st === 'failed' || (st !== 'verified' && s.entryDecision === 'Denied');
+    });
   }, [students]);
 
-  const [selectedStudentId, setSelectedStudentId] = useState(flaggedStudents[0]?.id || students[0]?.id || '');
+  const [selectedStudentId, setSelectedStudentId] = useState(() => flaggedStudents[0]?.id || students[0]?.id || '');
   const [violationType, setViolationType] = useState('Unsanctioned RF Transmission');
   const [customNotes, setCustomNotes] = useState('Student was flagged by Rover CV model near wrist area. Secondary RF beacon inspection confirmed active transmission. Dispatched floor supervisor. Student removed from examination hall with logged device.');
   const [roverId, setRoverId] = useState('ROV-SHIELD-09');
   const [reportSuccess, setReportSuccess] = useState(false);
 
   const isLight = theme === 'light';
+
+  // Ensure an ID is selected when students load
+  React.useEffect(() => {
+    if (!selectedStudentId && students.length > 0) {
+      setSelectedStudentId(flaggedStudents[0]?.id || students[0]?.id || '');
+    }
+  }, [students, flaggedStudents, selectedStudentId]);
 
   const selectedStudent = useMemo(() => {
     return students.find(s => s.id === selectedStudentId);
